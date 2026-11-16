@@ -1124,8 +1124,8 @@ mod tests {
     fn expanded_control_flow_actions_keep_their_originating_spans() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
-            "globalvar value = 1\nrule \"if\":\n    @Event global\n    if true:\n        wait(1)\n    disableInspector()\n",
-            "control-flow-provenance.opy",
+            "globalvar value = 1\nrule \"if\":\n    @Event global\n    if value:\n        wait(1)\n    disableInspector()\n",
+            "control-flow.opy",
             Path::new("."),
         )
         .unwrap();
