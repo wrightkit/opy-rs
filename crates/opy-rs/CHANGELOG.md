@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5](https://github.com/wrightkit/opy-rs/compare/v0.4.4...v0.4.5) - 2026-11-17
+
+### Fixed
+
+- *(settings)* carry map variant ids from map list objects ([#739](https://github.com/wrightkit/opy-rs/pull/739))
+- reject a macro that shares a name with a global variable like upstream ([#737](https://github.com/wrightkit/opy-rs/pull/737))
+- keep format arguments unfolded when optimizations are disabled like upstream ([#733](https://github.com/wrightkit/opy-rs/pull/733))
+
 ## [0.4.4](https://github.com/wrightkit/opy-rs/compare/v0.4.3...v0.4.4) - 2026-11-16
 
 ### Fixed
