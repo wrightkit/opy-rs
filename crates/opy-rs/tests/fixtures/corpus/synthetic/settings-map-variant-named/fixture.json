@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/settings-map-variant-named",
+  "category": "compilation",
+  "features": [
+    "settings",
+    "map variants"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "ruleNames": false,
+      "diagnosticCode": "workshop-emission"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "workshop-emission",
+      "failureClass": "frontend"
+    }
+  }
+}

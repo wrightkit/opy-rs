@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWatchpoint: Gibraltar 972777519512068292 972777519512068293\n\t\t\t}\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWatchpoint: Gibraltar 972777519512068292 972777519512068293\n\t\t\t}\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "b92233a371fe4dd79ccf115dbbfb74d239ae644473baa8117329746856fa9d84"
+  },
+  "fixture": "synthetic/settings-map-variant-ids",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "18246ffc037304bc353a8bc877bb3cfdf5762e6915a5543b2fa182d8e3cde472"
+      }
+    ],
+    "sha256": "ff7c8c3a3056fec9293fab0cba030a35e1c36e2b86199ee8081c37c7c930c576",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

@@ -1,3 +1,7 @@
+pub(crate) mod lowering;
+mod map_variants;
+mod value;
+
 use std::collections::HashMap;
 
 use crate::cst;
@@ -343,7 +347,7 @@ pub(crate) fn resolve_hir_settings(
     let children = settings
         .children
         .into_iter()
-        .map(|node| resolve_hir_node(node, &constants, &mut expander, &mut lowerer))
+        .map(|node| resolve_hir_node(node, &constants, &mut expander, &mut lowerer, 0))
         .collect::<OpyResult<Vec<_>>>()?;
     program.settings = Some(hir::Settings {
         span: settings.span,
@@ -369,20 +373,24 @@ fn resolve_hir_node(
     constants: &HashMap<String, &hir::Expr>,
     expander: &mut crate::compiler::MacroExpander<'_>,
     lowerer: &mut crate::lower::SettingsLowerer,
+    map_scope: u8,
 ) -> OpyResult<hir::SettingsNode> {
     match node {
         hir::SettingsNode::Group {
             name,
             children,
             span,
-        } => Ok(hir::SettingsNode::Group {
-            name,
-            children: children
-                .into_iter()
-                .map(|child| resolve_hir_node(child, constants, expander, lowerer))
-                .collect::<OpyResult<Vec<_>>>()?,
-            span,
-        }),
+        } => {
+            let next_scope = map_variants::child_scope(map_scope, &name);
+            Ok(hir::SettingsNode::Group {
+                name,
+                children: children
+                    .into_iter()
+                    .map(|child| resolve_hir_node(child, constants, expander, lowerer, next_scope))
+                    .collect::<OpyResult<Vec<_>>>()?,
+                span,
+            })
+        }
         hir::SettingsNode::Raw { name, value, span } => {
             let Some(span) = span else {
                 return Err(OpyError::new(
@@ -390,37 +398,16 @@ fn resolve_hir_node(
                     "settings value has no source span",
                 ));
             };
-            let diag_span = hir_span_to_diag_span(span);
             let value = eval_settings_text(&value, span, constants, expander, lowerer)?;
-            node_from_value(name, value, diag_span)
+            value::node_from_value(name, value, span, map_scope)
         }
-        // The pinned OverPy evaluates each settings list element through its
-        // expression path and errors on what it cannot resolve (#512).
-        // Evaluation is recorded on the element rather than emitted eagerly:
-        // elements under catalogued enum keys and hero lists are member
-        // names, not expressions, and only the downstream pass knows which.
         hir::SettingsNode::List {
             name,
             elements,
             span,
-        } => Ok(hir::SettingsNode::List {
-            name,
-            elements: elements
-                .into_iter()
-                .map(|mut element| {
-                    if element.evaluated.is_none()
-                        && let Some(span) = element.span
-                    {
-                        element.evaluated =
-                            eval_settings_text(&element.value, span, constants, expander, lowerer)
-                                .ok()
-                                .and_then(|value| display_value(&value).ok());
-                    }
-                    element
-                })
-                .collect(),
-            span,
-        }),
+        } => map_variants::resolve_list(
+            name, elements, span, map_scope, constants, expander, lowerer,
+        ),
         // A literal string still passes the pinned `__customString__`
         // check upstream — `{n}`/`{}` formatters without arguments are an
         // error even outside `.format(...)` calls (#512).
@@ -493,110 +480,6 @@ fn settings_expression_error(span: Span, message: String) -> OpyError {
         format!("settings value is not a compile-time value: {message}"),
         span,
     )
-}
-
-fn node_from_value(
-    name: String,
-    value: crate::compile_time::Value,
-    span: Span,
-) -> OpyResult<hir::SettingsNode> {
-    let node = match value {
-        // `String(numValue)` writes `NaN`/`Infinity` literally upstream —
-        // `x: 5%0` is `x: NaN` and `x: Infinity` is `x: Infinity` (#512).
-        crate::compile_time::Value::Number(value) => hir::SettingsNode::Number {
-            name,
-            value,
-            span: Some(span.into()),
-        },
-        crate::compile_time::Value::String(value) => {
-            if crate::compile_time::has_unbound_formatters(&value) {
-                return Err(settings_expression_error(
-                    span,
-                    format!("settings string '{value}' has format arguments"),
-                ));
-            }
-            hir::SettingsNode::String {
-                name,
-                value,
-                span: Some(span.into()),
-            }
-        }
-        crate::compile_time::Value::Bool(value) => hir::SettingsNode::Bool {
-            name,
-            value,
-            span: Some(span.into()),
-        },
-        crate::compile_time::Value::Array(values) => hir::SettingsNode::List {
-            name,
-            elements: values
-                .into_iter()
-                .map(|value| {
-                    let value = display_value(&value)?;
-                    Ok(hir::SettingsListElement {
-                        evaluated: Some(value.clone()),
-                        value,
-                        span: Some(span.into()),
-                    })
-                })
-                .collect::<Result<Vec<_>, String>>()
-                .map_err(|message| settings_expression_error(span, message))?,
-            span: Some(span.into()),
-        },
-        crate::compile_time::Value::Object(entries) => hir::SettingsNode::Group {
-            name,
-            children: entries
-                .into_iter()
-                .map(|(key, value)| {
-                    let crate::compile_time::Value::String(name) = key else {
-                        return Err(settings_expression_error(
-                            span,
-                            "compile-time object keys must be strings".to_string(),
-                        ));
-                    };
-                    node_from_value(name, value, span)
-                })
-                .collect::<OpyResult<Vec<_>>>()?,
-            span: Some(span.into()),
-        },
-        // A `vect` AST has no settings object form upstream — the
-        // reference reports it unhandled (#512).
-        crate::compile_time::Value::Vector(_) | crate::compile_time::Value::Null => {
-            return Err(settings_expression_error(
-                span,
-                "compile-time value is not a settings value".to_string(),
-            ));
-        }
-    };
-    Ok(node)
-}
-
-fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
-    match value {
-        // `String(value)` writes `NaN`/`Infinity` literally, as the pinned
-        // evaluator does for `%` results and unparsed number tokens (#512).
-        crate::compile_time::Value::Number(value) => {
-            Ok(crate::compiler::number_format::javascript_text(*value))
-        }
-        crate::compile_time::Value::String(value) => {
-            if crate::compile_time::has_unbound_formatters(value) {
-                return Err(format!("settings string '{value}' has format arguments"));
-            }
-            Ok(value.clone())
-        }
-        crate::compile_time::Value::Bool(value) => Ok(value.to_string()),
-        // JavaScript `String(value)` on containers, as the pinned evaluator
-        // writes them: arrays join their element text with commas, objects
-        // string-ify to the literal `[object Object]` (#512).
-        crate::compile_time::Value::Array(values) => values
-            .iter()
-            .map(display_value)
-            .collect::<Result<Vec<_>, _>>()
-            .map(|text| text.join(",")),
-        crate::compile_time::Value::Object(_) => Ok("[object Object]".to_string()),
-        crate::compile_time::Value::Vector(_) | crate::compile_time::Value::Null => {
-            Err("compile-time value is not a settings value".to_string())
-        }
-    }
 }
 
 /// The number a settings list element spells when the pinned tokenizer

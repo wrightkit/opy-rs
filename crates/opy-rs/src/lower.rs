@@ -3,9 +3,8 @@ use std::collections::{HashMap, HashSet};
 use crate::hir::types::{
     Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define,
     DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, PROTOCOL_VERSION,
-    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
-    SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
-    SwitchArm as HirSwitchArm, default_var_index,
+    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry, SourceFile,
+    Span as HirSpan, Stmt as HirStmt, SwitchArm as HirSwitchArm, default_var_index,
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt, TopLevel};
@@ -244,7 +243,10 @@ fn lower_program(
         defines,
         declarations,
         rules,
-        settings: program.settings.as_ref().map(lower_settings),
+        settings: program
+            .settings
+            .as_ref()
+            .map(crate::settings::lowering::lower_settings),
         preprocessing: preprocessing.clone(),
     })
 }
@@ -739,63 +741,6 @@ fn lower_annotations(annotations: &[cst::Annotation]) -> Vec<HirAnnotation> {
             span: Some(annotation.span.into()),
         })
         .collect()
-}
-
-fn lower_settings(settings: &cst::Settings) -> HirSettings {
-    HirSettings {
-        span: Some(settings.span.into()),
-        children: settings.children.iter().map(lower_settings_node).collect(),
-    }
-}
-
-fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
-    match node {
-        cst::SettingsNode::Group {
-            name,
-            children,
-            span,
-        } => HirSettingsNode::Group {
-            name: name.clone(),
-            children: children.iter().map(lower_settings_node).collect(),
-            span: Some((*span).into()),
-        },
-        cst::SettingsNode::Number { name, value, span } => HirSettingsNode::Number {
-            name: name.clone(),
-            value: *value,
-            span: Some((*span).into()),
-        },
-        cst::SettingsNode::Bool { name, value, span } => HirSettingsNode::Bool {
-            name: name.clone(),
-            value: *value,
-            span: Some((*span).into()),
-        },
-        cst::SettingsNode::String { name, value, span } => HirSettingsNode::String {
-            name: name.clone(),
-            value: value.clone(),
-            span: Some((*span).into()),
-        },
-        cst::SettingsNode::Raw { name, value, span } => HirSettingsNode::Raw {
-            name: name.clone(),
-            value: value.clone(),
-            span: Some((*span).into()),
-        },
-        cst::SettingsNode::List {
-            name,
-            elements,
-            span,
-        } => HirSettingsNode::List {
-            name: name.clone(),
-            elements: elements
-                .iter()
-                .map(|element| crate::hir::types::SettingsListElement {
-                    value: element.value.clone(),
-                    evaluated: (!element.expr).then(|| element.value.clone()),
-                    span: Some(element.span.into()),
-                })
-                .collect(),
-            span: Some((*span).into()),
-        },
-    }
 }
 
 impl Lowerer {
