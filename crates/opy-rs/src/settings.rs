@@ -1,4 +1,6 @@
-pub(crate) mod map_variants;
+pub(crate) mod lowering;
+mod map_variants;
+mod value;
 
 use std::collections::HashMap;
 
@@ -397,7 +399,7 @@ fn resolve_hir_node(
                 ));
             };
             let value = eval_settings_text(&value, span, constants, expander, lowerer)?;
-            map_variants::node_from_value(name, value, span, map_scope)
+            value::node_from_value(name, value, span, map_scope)
         }
         hir::SettingsNode::List {
             name,
@@ -478,35 +480,6 @@ fn settings_expression_error(span: Span, message: String) -> OpyError {
         format!("settings value is not a compile-time value: {message}"),
         span,
     )
-}
-
-fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
-    match value {
-        // `String(value)` writes `NaN`/`Infinity` literally, as the pinned
-        // evaluator does for `%` results and unparsed number tokens (#512).
-        crate::compile_time::Value::Number(value) => {
-            Ok(crate::compiler::number_format::javascript_text(*value))
-        }
-        crate::compile_time::Value::String(value) => {
-            if crate::compile_time::has_unbound_formatters(value) {
-                return Err(format!("settings string '{value}' has format arguments"));
-            }
-            Ok(value.clone())
-        }
-        crate::compile_time::Value::Bool(value) => Ok(value.to_string()),
-        // JavaScript `String(value)` on containers, as the pinned evaluator
-        // writes them: arrays join their element text with commas, objects
-        // string-ify to the literal `[object Object]` (#512).
-        crate::compile_time::Value::Array(values) => values
-            .iter()
-            .map(display_value)
-            .collect::<Result<Vec<_>, _>>()
-            .map(|text| text.join(",")),
-        crate::compile_time::Value::Object(_) => Ok("[object Object]".to_string()),
-        crate::compile_time::Value::Vector(_) | crate::compile_time::Value::Null => {
-            Err("compile-time value is not a settings value".to_string())
-        }
-    }
 }
 
 /// The number a settings list element spells when the pinned tokenizer
