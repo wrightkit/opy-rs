@@ -46,6 +46,29 @@ impl<'a> Emitter<'a> {
         true
     }
 
+    /// The right-hand side of a Set line, newline included.
+    /// `x = x.exclude(v)` recompiles to the Modify form, so a Set whose
+    /// `removeFromArray` operand is its own target cannot round-trip.
+    pub(super) fn set_rhs(&mut self, target: &str, value: &Value, span: Option<Span>) {
+        if let Value::Call { name, args } = value
+            && name == "removeFromArray"
+            && args.len() == 2
+            && self.render_value_as(&args[0], span, |this, v, s| this.emit_value(v, s)) == target
+        {
+            self.issue(
+                "unsupported-value-call",
+                format!(
+                    "value call 'removeFromArray' on its own assignment target '{target}' \
+                 recompiles to a modify action on the OPY surface"
+                ),
+                span,
+            );
+            return;
+        }
+        self.emit_value(value, span);
+        self.out.push('\n');
+    }
+
     fn emit_value_list(&mut self, args: &[Value], span: Option<Span>) {
         for (index, arg) in args.iter().enumerate() {
             if index > 0 {

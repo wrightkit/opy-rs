@@ -1241,8 +1241,7 @@ impl<'a> Emitter<'a> {
         self.out.push_str(&Self::indent(level));
         self.out.push_str(target);
         self.out.push_str(" = ");
-        self.emit_value(value, span);
-        self.out.push('\n');
+        self.set_rhs(target, value, span);
     }
 
     fn render_value_as(

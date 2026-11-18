@@ -95,3 +95,58 @@ fn event_player_and_exclude_value_calls_round_trip_in_en_us() {
 fn event_player_and_exclude_value_calls_round_trip_in_zh_cn() {
     round_trip("zh-CN", EVENT_SOURCE, EVENT_EXPECT);
 }
+
+// The Set form of a self-referential `removeFromArray` is not the Modify form,
+// and `g = g.exclude(v)` recompiles to the Modify form, so reconstruction
+// refuses it by construct name.
+const SELF_EXCLUDE_TEXT: &str = r#"variables {
+    global:
+        0: g
+    player:
+        0: p
+}
+
+rule ("self exclude") {
+    event {
+        Ongoing - Global;
+    }
+    actions {
+        Set Global Variable(g, Remove From Array(Global Variable(g), Victim));
+        Set Player Variable(Event Player, p, Remove From Array(Player Variable(Event Player, p), Victim));
+    }
+}
+"#;
+
+fn self_exclude_refusal(language: &str) -> String {
+    let catalog = Catalog::builtin().expect("catalog loads");
+    let program =
+        workshop_rs::parser::parse(SELF_EXCLUDE_TEXT, &catalog, &Locale::new("en-US")).unwrap();
+    let locale = Locale::new(language);
+    let text = workshop_rs::emitter::emit(&program, &catalog, &locale).expect("text emits");
+    let program = workshop_rs::parser::parse(&text, &catalog, &locale).expect("text parses");
+    reconstruct(&program)
+        .expect_err("self-referential set is refused")
+        .to_string()
+}
+
+#[test]
+fn self_referential_remove_from_array_set_is_refused_in_en_us() {
+    let message = self_exclude_refusal("en-US");
+    assert_eq!(
+        message.matches("unsupported-value-call").count(),
+        2,
+        "{message}"
+    );
+    assert!(message.contains("removeFromArray"), "{message}");
+}
+
+#[test]
+fn self_referential_remove_from_array_set_is_refused_in_zh_cn() {
+    let message = self_exclude_refusal("zh-CN");
+    assert_eq!(
+        message.matches("unsupported-value-call").count(),
+        2,
+        "{message}"
+    );
+    assert!(message.contains("removeFromArray"), "{message}");
+}
