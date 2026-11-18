@@ -7,6 +7,12 @@
     "accepted values"
   ],
   "source": "source.opy",
+  "attribution": {
+    "kind": "original",
+    "origin": "Minimized from ballhallaa/ballkour commit 8565222bacd1efe4cf6126f6838421fee1bea0b3, src/main.opy:59-64, for OPY compatibility regression (wrightkit/opy-rs#731)",
+    "license": "MIT",
+    "redistributable": true
+  },
   "tests": {
     "source": {
       "nativeStatus": "success",
