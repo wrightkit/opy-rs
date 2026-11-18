@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7](https://github.com/wrightkit/opy-rs/compare/v0.4.6...v0.4.7) - 2026-11-18
+
+### Fixed
+
+- pin String Slice on a Number and point catalog-validation at the call ([#757](https://github.com/wrightkit/opy-rs/pull/757))
+- keep a folded Boolean format argument as an argument when optimizations are enabled ([#756](https://github.com/wrightkit/opy-rs/pull/756))
+- reconstruct player-variable chase actions in convert --target opy ([#755](https://github.com/wrightkit/opy-rs/pull/755))
+
+### Other
+
+- pin the macro/global conflict message and location to the reference ([#749](https://github.com/wrightkit/opy-rs/pull/749))
+
 ## [0.4.6](https://github.com/wrightkit/opy-rs/compare/v0.4.5...v0.4.6) - 2026-11-18
 
 ### Fixed
