@@ -1390,11 +1390,10 @@ fn reconstruct_refusal_carries_every_issue_code_and_span() {
     // clients can show each code with its span.
     assert_eq!(
         lpp["details"]["refusalCode"],
-        json!("unsupported-enum-domain-mismatch")
+        json!("unsupported-value-call")
     );
     let message = response["error"]["message"].as_str().expect("message");
     for (code, span) in [
-        ("unsupported-enum-domain-mismatch", "at 11:50"),
         ("unsupported-value-call", "at 11:50"),
         ("unsupported-action-call", "at 12:9"),
     ] {

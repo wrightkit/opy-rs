@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -15,6 +16,7 @@ use crate::lower::{NameNamespace, is_reserved_name};
 use crate::manifest::{Function, FunctionKind, Manifest};
 
 mod action_names;
+mod enum_domain_args;
 mod settings;
 mod settings_json;
 mod value_literals;
@@ -1874,67 +1876,31 @@ impl<'a> Emitter<'a> {
                 .copied()
                 .flatten()
                 .or(span);
-            self.check_param_argument(entry, index, arg, argument_span);
-            self.emit_value(arg, argument_span);
+            let arg = self.check_param_argument(entry, index, arg, argument_span);
+            self.emit_value(&arg, argument_span);
         }
         self.out.push(')');
     }
 
-    fn check_param_argument(
+    fn check_param_argument<'v>(
         &mut self,
         entry: &Function,
         index: usize,
-        arg: &Value,
+        arg: &'v Value,
         span: Option<Span>,
-    ) {
+    ) -> Cow<'v, Value> {
         let Some(param) = entry.params.get(index) else {
-            return;
+            return Cow::Borrowed(arg);
         };
-        if let Some(domain) = param.domain.as_ref() {
-            match arg {
-                Value::Enum { value_type, value } if value_type == domain => {
-                    if !self.enum_member_in_domain(domain, value) {
-                        self.issue(
-                            "unsupported-enum-member",
-                            format!(
-                                "argument {} of '{}' uses enum member '{domain}.{value}' \
-                                 which is outside the manifest's declared domain",
-                                index + 1,
-                                entry.id
-                            ),
-                            span,
-                        );
-                    }
-                }
-                Value::Enum { value_type, .. } => {
-                    self.issue(
-                        "unsupported-enum-domain-mismatch",
-                        format!(
-                            "argument {} of '{}' expects enum domain '{domain}' but \
-                             the Workshop value carries '{value_type}'",
-                            index + 1,
-                            entry.id
-                        ),
-                        span,
-                    );
-                }
-                _ => {
-                    self.issue(
-                        "unsupported-enum-domain-mismatch",
-                        format!(
-                            "argument {} of '{}' expects an enum member of domain \
-                             '{domain}'",
-                            index + 1,
-                            entry.id
-                        ),
-                        span,
-                    );
-                }
-            }
-        }
+        let arg = match param.domain.as_ref() {
+            Some(domain) => self.check_domain_argument(entry, index, domain, arg, span),
+            None => Cow::Borrowed(arg),
+        };
         if param.variable {
-            let is_variable =
-                matches!(arg, Value::GlobalVariable(_) | Value::PlayerVariable { .. });
+            let is_variable = matches!(
+                &*arg,
+                Value::GlobalVariable(_) | Value::PlayerVariable { .. }
+            );
             if !is_variable {
                 self.issue(
                     "unsupported-invalid-argument",
@@ -1947,6 +1913,7 @@ impl<'a> Emitter<'a> {
                 );
             }
         }
+        arg
     }
 
     fn enum_member_in_domain(&self, domain: &str, member: &str) -> bool {
@@ -2160,11 +2127,11 @@ impl<'a> Emitter<'a> {
             && let Some((_, operator)) = ARITHMETIC_OPS.iter().find(|(n, _)| *n == name)
         {
             self.out.push('(');
-            self.emit_value(&args[0], span);
+            self.emit_arithmetic_operand(&args[0], span);
             self.out.push(' ');
             self.out.push_str(operator);
             self.out.push(' ');
-            self.emit_value(&args[1], span);
+            self.emit_arithmetic_operand(&args[1], span);
             self.out.push(')');
             return true;
         }
@@ -2368,6 +2335,9 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_value_call(&mut self, name: &str, args: &[Value], span: Option<Span>) {
+        if self.refuse_ambiguous_constant(name, args, span) {
+            return;
+        }
         if name == "localPlayer" && args.is_empty() {
             self.out.push_str(name);
             return;
