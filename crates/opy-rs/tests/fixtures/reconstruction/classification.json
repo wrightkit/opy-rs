@@ -25,11 +25,10 @@
       "sha256": "b2b1ab8dd81a585e024795f1326d32142196c85794a0da679af89e85cdef1cd1",
       "status": "refused",
       "codes": [
-        "unsupported-enum-domain-mismatch",
         "unsupported-settings",
         "unsupported-value-call"
       ],
-      "note": "Issues across the recorded refusal codes: value calls with no OPY source form ('attacker', 'removeFromArray', '__ambiguous_enum'), Hero/Color enum-domain mismatches on 'startForcingHero'/'setAllowedHeroes'/'abilityIconString'/'hudText'/'progressBarHud' arguments, and 'Competitive Rules'/'disabled maps' settings members that reparse under catalogued display names."
+      "note": "Issues across the recorded refusal codes: value calls with no OPY source form ('attacker', 'removeFromArray') and 'Competitive Rules'/'disabled maps' settings members that reparse under catalogued display names."
     },
     {
       "id": "shionSettings",
