@@ -236,40 +236,14 @@ impl<'a> Lowering<'a> {
                 if dynamic_args.is_empty() {
                     return Ok(self.lower_custom_string(format_text));
                 }
-                if dynamic_args.len() <= 3 {
-                    let text_node = self.push_value(Value::String(format_text));
-                    let mut call_args = vec![text_node];
-                    call_args.extend(self.lower_values(dynamic_args)?);
-                    Value::Call {
-                        name: "customString".to_string(),
-                        args: call_args,
-                    }
-                } else {
-                    let chunks = split_format_chunks(&format_text, dynamic_args.len()).ok_or_else(|| {
-                        self.unsupported(
-                            "format strings with more than three replacements require sequential placeholders",
-                            span,
-                        )
-                    })?;
-                    let lowered_args = self.lower_values(dynamic_args)?;
-                    let mut parts = Vec::with_capacity(chunks.len());
-                    for (chunk, indices) in chunks {
-                        let text = self.push_value(Value::String(chunk));
-                        let mut call_args = vec![text];
-                        call_args.extend(indices.into_iter().map(|index| lowered_args[index]));
-                        let call_args =
-                            self.normalize_contextual_arguments("customString", call_args);
-                        parts.push(self.push_value(Value::Call {
-                            name: "customString".to_string(),
-                            args: call_args,
-                        }));
-                    }
-                    let separator = self.push_value(Value::String("{0}{1}".to_string()));
-                    let mut value = parts[0];
-                    for part in parts.into_iter().skip(1) {
-                        value = self.push_call("customString", vec![separator, value, part]);
-                    }
-                    return Ok(value);
+                // More than three arguments stay in one call: `split_all`
+                // splits the finished string like the reference.
+                let text_node = self.push_value(Value::String(format_text));
+                let mut call_args = vec![text_node];
+                call_args.extend(self.lower_values(dynamic_args)?);
+                Value::Call {
+                    name: "customString".to_string(),
+                    args: call_args,
                 }
             }
             Expr::Conditional {
