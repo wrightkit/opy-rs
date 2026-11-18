@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.8](https://github.com/wrightkit/opy-rs/compare/v0.4.7...v0.4.8) - 2026-11-18
+
+### Fixed
+
+- reconstruct attacker, victim, healer, healee and removeFromArray in convert --target opy ([#762](https://github.com/wrightkit/opy-rs/pull/762))
+- reconstruct enum-domain arguments in convert --target opy ([#759](https://github.com/wrightkit/opy-rs/pull/759))
+
 ## [0.4.7](https://github.com/wrightkit/opy-rs/compare/v0.4.6...v0.4.7) - 2026-11-18
 
 ### Fixed
