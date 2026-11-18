@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n}\n\nrule (\"boolean arguments\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"{0}\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} 3\", False));\n        Big Message(Event Player, Custom String(\"{0} {1} 3\", True, Global.g));\n        Big Message(Event Player, Custom String(\"{0} {1}\", Global.g, False));\n        Big Message(Event Player, Custom String(\"{0} y\", True));\n    }\n}\n\nrule (\"non-boolean constants fold\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"3 x\"));\n        Big Message(Event Player, Custom String(\"a x\"));\n        Big Message(Event Player, Custom String(\"{0} x\", Vector(1, 2, 3)));\n        Big Message(Event Player, Custom String(\"{0} x\", Hero(Reaper)));\n    }\n}\n\n//Strict optimizations enabled\nrule (\"strict\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n    }\n}\n\n//Strict optimizations disabled\n//Optimize for size enabled\nrule (\"size\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n    }\n}\n\n//Optimizations disabled\nrule (\"disabled\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"{0} x\", Not(True)));\n        Big Message(Event Player, Custom String(\"{0} x\", Compare(1, ==, 1)));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n}\n\nrule (\"boolean arguments\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"{0}\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n        Big Message(Event Player, Custom String(\"{0} 3\", False));\n        Big Message(Event Player, Custom String(\"{0} {1} 3\", True, Global.g));\n        Big Message(Event Player, Custom String(\"{0} {1}\", Global.g, False));\n        Big Message(Event Player, Custom String(\"{0} y\", True));\n    }\n}\n\nrule (\"non-boolean constants fold\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"3 x\"));\n        Big Message(Event Player, Custom String(\"a x\"));\n        Big Message(Event Player, Custom String(\"{0} x\", Vector(1, 2, 3)));\n        Big Message(Event Player, Custom String(\"{0} x\", Hero(Reaper)));\n    }\n}\n\n//Strict optimizations enabled\nrule (\"strict\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n    }\n}\n\n//Strict optimizations disabled\n//Optimize for size enabled\nrule (\"size\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"{0} x\", False));\n        Big Message(Event Player, Custom String(\"{0} x\", True));\n    }\n}\n\n//Optimizations disabled\nrule (\"disabled\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Custom String(\"{0} x\", Not(True)));\n        Big Message(Event Player, Custom String(\"{0} x\", Compare(1, ==, 1)));\n    }\n}\n\n",
+    "workshopSha256": "fb967750dc71d198a21cd3cd6e35adc18aa415adb2b2c80343c7019917045fa4"
+  },
+  "fixture": "synthetic/format-boolean-argument",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "04c85a3ef5129b4623bd7e3eeaefc3685893f79d0e1f8ff1f09083325c20bb2e"
+      }
+    ],
+    "sha256": "3b64dff988cd03b30de73f3d5d935fbbb74299f0fd9da87ea8e5b8470d5e0536",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

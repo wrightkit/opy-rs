@@ -36,6 +36,7 @@ impl<'a> Lowering<'a> {
             let value = optimized
                 .then(|| crate::compile_time::evaluate(arg, &self.constants, &bindings, &mut stack))
                 .flatten()
+                .filter(|value| !matches!(value, crate::compile_time::Value::Bool(_)))
                 .and_then(crate::compile_time::display);
             if value.is_none() {
                 dynamic_position.insert(index, dynamic_args.len());
