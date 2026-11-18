@@ -1,5 +1,6 @@
 //! Round trip for value calls whose OPY form is a literal or a factory:
-//! array literals and the Workshop setting values (opy-rs#744).
+//! array literals, the Workshop setting values, event-player keywords and
+//! `exclude` (opy-rs#744).
 
 use std::path::Path;
 
@@ -26,7 +27,20 @@ rule "values":
     A = createWorkshopSettingFloat("", "Scale", 1.5, 0.5, 2.5)
 "#;
 
-fn round_trip(language: &str) {
+const EVENT_SOURCE: &str = r#"
+globalvar A
+globalvar B
+globalvar C
+
+rule "event players":
+    @Event playerTookDamage
+    A = attacker
+    B = victim
+    C = [1, 2, 3].exclude(B)
+    C = [4, 5].exclude(2)
+"#;
+
+fn round_trip(language: &str, source: &str, expect: &[&str]) {
     let compiler = Compiler::new().expect("compiler loads");
     let catalog = Catalog::builtin().expect("catalog loads");
     let locale = Locale::new(language);
@@ -36,14 +50,13 @@ fn round_trip(language: &str) {
             .unwrap_or_else(|e| panic!("{path} does not compile: {e:?}\n{source}"))
     };
 
-    let original = compile(SOURCE, "values.opy");
+    let original = compile(source, "values.opy");
     let program = workshop_rs::parser::parse(&original.emitted, &catalog, &locale)
         .expect("compiled Workshop text parses");
     let opy = reconstruct(&program).unwrap_or_else(|e| panic!("{language}: refused: {e}"));
-    assert!(opy.contains("[1, 2, 3]"), "{opy}");
-    assert!(opy.contains("createWorkshopSettingBool("), "{opy}");
-    assert!(opy.contains("createWorkshopSettingInt("), "{opy}");
-    assert!(opy.contains("createWorkshopSettingEnum("), "{opy}");
+    for needle in expect {
+        assert!(opy.contains(needle), "missing {needle}\n{opy}");
+    }
 
     let recompiled = compile(&opy, "reconstructed.opy");
     let reparsed = workshop_rs::parser::parse(&recompiled.emitted, &catalog, &locale)
@@ -55,12 +68,30 @@ fn round_trip(language: &str) {
     );
 }
 
+const VALUE_EXPECT: &[&str] = &[
+    "[1, 2, 3]",
+    "createWorkshopSettingBool(",
+    "createWorkshopSettingInt(",
+    "createWorkshopSettingEnum(",
+];
+const EVENT_EXPECT: &[&str] = &["= attacker", "= victim", ".exclude("];
+
 #[test]
 fn array_and_setting_value_calls_round_trip_in_en_us() {
-    round_trip("en-US");
+    round_trip("en-US", SOURCE, VALUE_EXPECT);
 }
 
 #[test]
 fn array_and_setting_value_calls_round_trip_in_zh_cn() {
-    round_trip("zh-CN");
+    round_trip("zh-CN", SOURCE, VALUE_EXPECT);
+}
+
+#[test]
+fn event_player_and_exclude_value_calls_round_trip_in_en_us() {
+    round_trip("en-US", EVENT_SOURCE, EVENT_EXPECT);
+}
+
+#[test]
+fn event_player_and_exclude_value_calls_round_trip_in_zh_cn() {
+    round_trip("zh-CN", EVENT_SOURCE, EVENT_EXPECT);
 }

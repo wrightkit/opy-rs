@@ -11,8 +11,8 @@ const SETTING_FACTORIES: &[(&str, &str)] = &[
 ];
 
 impl<'a> Emitter<'a> {
-    /// Array literals and Workshop setting values, the value calls whose OPY
-    /// form is a literal or a factory rather than a catalog call.
+    /// Array literals, Workshop setting values, event-player keywords and
+    /// `exclude`: the value calls whose OPY form is not a catalog call.
     pub(super) fn emit_literal_value(
         &mut self,
         name: &str,
@@ -23,6 +23,17 @@ impl<'a> Emitter<'a> {
             self.out.push('[');
             self.emit_value_list(args, span);
             self.out.push(']');
+            return true;
+        }
+        if matches!(name, "attacker" | "victim" | "healer" | "healee") && args.is_empty() {
+            self.out.push_str(name);
+            return true;
+        }
+        if let ("removeFromArray", [array, removed]) = (name, args) {
+            self.emit_parenthesized(array, span);
+            self.out.push_str(".exclude(");
+            self.emit_value(removed, span);
+            self.out.push(')');
             return true;
         }
         let Some((_, factory)) = SETTING_FACTORIES.iter().find(|(n, _)| *n == name) else {
