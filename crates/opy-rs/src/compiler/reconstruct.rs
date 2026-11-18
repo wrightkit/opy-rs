@@ -17,6 +17,7 @@ use crate::manifest::{Function, FunctionKind, Manifest};
 
 mod action_names;
 mod enum_domain_args;
+mod self_removal;
 mod settings;
 mod settings_json;
 mod value_literals;
@@ -1106,6 +1107,9 @@ impl<'a> Emitter<'a> {
         level: usize,
     ) {
         let span = self.program.action_span(rule_index, action_index);
+        if self.refuse_self_removal(action, span) {
+            return;
+        }
         let indent = Self::indent(level);
         match action {
             Action::SetGlobalVariable { variable, value } => {
@@ -1697,19 +1701,6 @@ impl<'a> Emitter<'a> {
                 true
             }
             _ => false,
-        }
-    }
-
-    fn indexed_target(&mut self, variable: &Value, span: Option<Span>) -> Option<String> {
-        match variable {
-            Value::GlobalVariable(name) => Some(name.clone()),
-            Value::PlayerVariable { player, variable } => {
-                let receiver = self.render_value_as(player, span, |this, player, span| {
-                    this.emit_player_variable_receiver(player, span);
-                });
-                Some(format!("{receiver}.{variable}"))
-            }
-            _ => None,
         }
     }
 
