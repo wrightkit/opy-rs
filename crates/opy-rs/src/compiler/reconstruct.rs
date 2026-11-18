@@ -14,6 +14,7 @@ use crate::lower::special_forms::SpecialValueCall;
 use crate::lower::{NameNamespace, is_reserved_name};
 use crate::manifest::{Function, FunctionKind, Manifest};
 
+mod action_names;
 mod settings;
 mod settings_json;
 mod value_literals;
@@ -1379,17 +1380,9 @@ impl<'a> Emitter<'a> {
         indent: &str,
         span: Option<Span>,
     ) {
-        if DEDICATED_ACTION_NAMES.contains(&name) {
-            self.issue(
-                "unsupported-action-call",
-                format!(
-                    "action call '{name}' is lowered to a dedicated Workshop action \
-                     and has no reconstructible call form"
-                ),
-                span,
-            );
+        let Some(name) = self.call_action_name(name, span) else {
             return;
-        }
+        };
         if self.emit_syntax_action(rule_index, action_index, name, args, indent, span) {
             return;
         }
