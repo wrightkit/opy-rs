@@ -18,20 +18,31 @@ const FIXTURES: [&str; 5] = [
 
 /// The pinned OverPy numbers the lines after a `#!disableOptimizations` or
 /// `#!enableOptimizations` line one too high per such line, for every
-/// diagnostic. A native diagnostic keeps the true source line, so the
-/// reference line is the native line plus the exact pragma lines above it.
+/// diagnostic (an upstream tokenizer defect; approved exception in
+/// `docs/architecture/language-core.md`). A native diagnostic keeps the true
+/// source line, so the reference line is the native line plus the exact
+/// pragma lines above it. The line must be the bare pragma: a trailing
+/// character (including the `\r` of a CRLF ending) or a place inside a block
+/// comment does not shift.
 fn reference_line(source: &str, native_line: u32) -> u32 {
-    let pragmas = source
-        .lines()
-        .take(native_line as usize - 1)
-        .filter(|line| {
-            matches!(
+    let mut in_block_comment = false;
+    let mut pragmas = 0;
+    for line in source.split('\n').take(native_line as usize - 1) {
+        if !in_block_comment
+            && matches!(
                 line.trim_start(),
                 "#!disableOptimizations" | "#!enableOptimizations"
             )
-        })
-        .count();
-    native_line + pragmas as u32
+        {
+            pragmas += 1;
+        }
+        if let Some(open) = line.rfind("/*") {
+            in_block_comment = line.rfind("*/").is_none_or(|close| close < open);
+        } else if line.contains("*/") {
+            in_block_comment = false;
+        }
+    }
+    native_line + pragmas
 }
 
 fn reference_diagnostic(fixture: &Path) -> (String, u32, u32) {
