@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6](https://github.com/wrightkit/opy-rs/compare/v0.4.5...v0.4.6) - 2026-11-18
+
+### Fixed
+
+- keep more than three dynamic format arguments as one Custom String when optimizations are disabled like upstream ([#750](https://github.com/wrightkit/opy-rs/pull/750))
+- reconstruct array and workshop setting value calls in convert --target opy ([#748](https://github.com/wrightkit/opy-rs/pull/748))
+
 ## [0.4.5](https://github.com/wrightkit/opy-rs/compare/v0.4.4...v0.4.5) - 2026-11-17
 
 ### Fixed
