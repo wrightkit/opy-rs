@@ -1551,59 +1551,6 @@ fn canonical_format_text(text: &str) -> String {
     output
 }
 
-fn split_format_chunks(text: &str, arg_count: usize) -> Option<Vec<(String, Vec<usize>)>> {
-    let mut chunks = Vec::new();
-    let mut current = String::new();
-    let mut indices = Vec::new();
-    let mut pending = String::new();
-    let mut cursor = 0;
-    while cursor < text.len() {
-        let Some(open_rel) = text[cursor..].find('{') else {
-            pending.push_str(&text[cursor..]);
-            break;
-        };
-        let open = cursor + open_rel;
-        let Some(close_rel) = text[open + 1..].find('}') else {
-            pending.push_str(&text[cursor..]);
-            break;
-        };
-        let close = open + 1 + close_rel;
-        let marker = &text[open + 1..close];
-        let Ok(index) = marker.parse::<usize>() else {
-            pending.push_str(&text[cursor..=close]);
-            cursor = close + 1;
-            continue;
-        };
-        if index >= arg_count {
-            return None;
-        }
-        pending.push_str(&text[cursor..open]);
-        if indices.len() == 3 && !indices.contains(&index) {
-            chunks.push((current, indices));
-            current = String::new();
-            indices = Vec::new();
-        }
-        current.push_str(&pending);
-        pending.clear();
-        let local = if let Some(local) = indices.iter().position(|candidate| *candidate == index) {
-            local
-        } else {
-            indices.push(index);
-            indices.len() - 1
-        };
-        current.push('{');
-        current.push_str(&local.to_string());
-        current.push('}');
-        cursor = close + 1;
-    }
-    current.push_str(&pending);
-    if current.is_empty() && chunks.is_empty() {
-        return Some(vec![(text.to_string(), Vec::new())]);
-    }
-    chunks.push((current, indices));
-    Some(chunks)
-}
-
 fn debug_expr_text(expr: &Expr) -> String {
     match expr {
         Expr::Number { text, .. } => text.clone(),
