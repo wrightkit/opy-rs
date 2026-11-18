@@ -17,7 +17,7 @@ use crate::manifest::{Function, FunctionKind, Manifest};
 
 mod action_names;
 mod enum_domain_args;
-mod self_removal;
+mod set_rewrite;
 mod settings;
 mod settings_json;
 mod value_literals;
@@ -1107,7 +1107,7 @@ impl<'a> Emitter<'a> {
         level: usize,
     ) {
         let span = self.program.action_span(rule_index, action_index);
-        if self.refuse_self_removal(action, span) {
+        if self.refuse_set_rewrite(action, span) {
             return;
         }
         let indent = Self::indent(level);
