@@ -32,3 +32,19 @@ fn six_v_six_reaches_the_pinned_unknown_member_frontier() {
     assert_eq!(span.path, "utilities/custom_hp.opy");
     assert_eq!(span.start.line, 31);
 }
+
+#[test]
+fn a_rejected_nested_argument_points_at_its_call() {
+    let source = "globalvar s 0\n\nrule \"r\":\n    s = vect(1, 2, 3).substring(1, 2)\n";
+    let report = Compiler::new().unwrap().compile_source_report_with_locale(
+        source,
+        "main.opy",
+        &fixture_dir("synthetic"),
+        &Locale::new("en-US"),
+    );
+
+    let diagnostic = report.compile.diagnostics.first().unwrap();
+    assert_eq!(diagnostic.code, "catalog-validation");
+    let span = diagnostic.span.as_ref().unwrap();
+    assert_eq!((span.start.line, span.start.col), (4, 9));
+}

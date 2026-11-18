@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/string-slice-number",
+  "category": "compilation",
+  "features": [
+    "builtin call arguments",
+    "accepted values"
+  ],
+  "source": "source.opy",
+  "attribution": {
+    "kind": "original",
+    "origin": "Minimized from ballhallaa/ballkour commit 8565222bacd1efe4cf6126f6838421fee1bea0b3, src/main.opy:59-64, for OPY compatibility regression",
+    "license": "MIT",
+    "redistributable": true
+  },
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}
