@@ -30,7 +30,7 @@
         "unsupported-settings",
         "unsupported-value-call"
       ],
-      "note": "65 issues across the recorded refusal codes: value/action calls with no OPY source form ('array', 'attacker', 'removeFromArray', 'workshopSettingToggle', 'createWorkshopSettingHero', '__ambiguous_enum', 'stopChasingPlayerVariable'), Hero/Color enum-domain mismatches on 'startForcingHero'/'setAllowedHeroes'/'abilityIconString'/'hudText'/'progressBarHud' arguments, and 'Competitive Rules'/'disabled maps' settings members that reparse under catalogued display names."
+      "note": "65 issues across the recorded refusal codes: value/action calls with no OPY source form ('attacker', 'removeFromArray', '__ambiguous_enum', 'stopChasingPlayerVariable'), Hero/Color enum-domain mismatches on 'startForcingHero'/'setAllowedHeroes'/'abilityIconString'/'hudText'/'progressBarHud' arguments, and 'Competitive Rules'/'disabled maps' settings members that reparse under catalogued display names."
     },
     {
       "id": "shionSettings",

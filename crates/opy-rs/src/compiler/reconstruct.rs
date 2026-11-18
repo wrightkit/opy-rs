@@ -16,6 +16,7 @@ use crate::manifest::{Function, FunctionKind, Manifest};
 
 mod settings;
 mod settings_json;
+mod value_literals;
 
 const DECLARATION_SLOT_RANGE: std::ops::Range<u32> = 0..128;
 
@@ -2174,6 +2175,9 @@ impl<'a> Emitter<'a> {
             self.out.push(')');
             return true;
         }
+        if self.emit_literal_value(name, args, span) {
+            return true;
+        }
         match name {
             // valueInArray(a, i) → `a[i]`; a literal-zero index is
             // unreachable: every `a[i]` spelling folding to 0 normalizes to
@@ -2354,43 +2358,7 @@ impl<'a> Emitter<'a> {
                 });
                 true
             }
-            "currentArrayElement" if args.is_empty() => {
-                match self.lambda_binders.last() {
-                    Some((element, _)) => {
-                        self.out.push_str(element);
-                    }
-                    None => {
-                        self.issue(
-                            "unsupported-value-call",
-                            "currentArrayElement outside an array callback has no OPY binder",
-                            span,
-                        );
-                    }
-                }
-                true
-            }
-            "currentArrayIndex" if args.is_empty() => {
-                match self.lambda_binders.last() {
-                    Some((_, Some(index))) => {
-                        self.out.push_str(index);
-                    }
-                    Some(_) => {
-                        self.issue(
-                            "unsupported-value-call",
-                            "currentArrayIndex used but the callback has no index binder",
-                            span,
-                        );
-                    }
-                    None => {
-                        self.issue(
-                            "unsupported-value-call",
-                            "currentArrayIndex outside an array callback has no OPY binder",
-                            span,
-                        );
-                    }
-                }
-                true
-            }
+            "currentArrayElement" | "currentArrayIndex" => self.emit_array_binder(name, args, span),
             _ => false,
         }
     }
