@@ -113,6 +113,8 @@ rule ("self exclude") {
     actions {
         Set Global Variable(g, Remove From Array(Global Variable(g), Victim));
         Set Player Variable(Event Player, p, Remove From Array(Player Variable(Event Player, p), Victim));
+        Set Global Variable At Index(g, 1, Remove From Array(Value In Array(Global Variable(g), 1), 5));
+        Set Player Variable At Index(Event Player, p, 1, Remove From Array(Value In Array(Player Variable(Event Player, p), 1), 5));
     }
 }
 "#;
@@ -134,7 +136,7 @@ fn self_referential_remove_from_array_set_is_refused_in_en_us() {
     let message = self_exclude_refusal("en-US");
     assert_eq!(
         message.matches("unsupported-value-call").count(),
-        2,
+        4,
         "{message}"
     );
     assert!(message.contains("removeFromArray"), "{message}");
@@ -145,7 +147,7 @@ fn self_referential_remove_from_array_set_is_refused_in_zh_cn() {
     let message = self_exclude_refusal("zh-CN");
     assert_eq!(
         message.matches("unsupported-value-call").count(),
-        2,
+        4,
         "{message}"
     );
     assert!(message.contains("removeFromArray"), "{message}");

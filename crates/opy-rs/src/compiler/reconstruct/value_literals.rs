@@ -46,24 +46,31 @@ impl<'a> Emitter<'a> {
         true
     }
 
-    /// The right-hand side of a Set line, newline included.
-    /// `x = x.exclude(v)` recompiles to the Modify form, so a Set whose
+    /// The right-hand side of a Set line whose left-hand side and ` = ` are
+    /// already in `out`; the newline is included. `x = x.exclude(v)` (also
+    /// `x[i] = x[i].exclude(v)`) recompiles to the Modify form, so a Set whose
     /// `removeFromArray` operand is its own target cannot round-trip.
-    pub(super) fn set_rhs(&mut self, target: &str, value: &Value, span: Option<Span>) {
+    pub(super) fn set_rhs(&mut self, value: &Value, span: Option<Span>) {
         if let Value::Call { name, args } = value
             && name == "removeFromArray"
             && args.len() == 2
-            && self.render_value_as(&args[0], span, |this, v, s| this.emit_value(v, s)) == target
         {
-            self.issue(
-                "unsupported-value-call",
-                format!(
-                    "value call 'removeFromArray' on its own assignment target '{target}' \
-                 recompiles to a modify action on the OPY surface"
-                ),
-                span,
-            );
-            return;
+            let strip = |text: &str| text.replace(['(', ')', ' '], "");
+            let line = self.out.rsplit('\n').next().unwrap_or_default();
+            let target = line.trim().trim_end_matches('=').trim().to_string();
+            let array = self.render_value_as(&args[0], span, |this, v, s| this.emit_value(v, s));
+            if strip(&array) == strip(&target) {
+                self.issue(
+                    "unsupported-value-call",
+                    format!(
+                        "value call 'removeFromArray' on its own assignment target \
+                         '{target}' recompiles to a modify action on the OPY surface"
+                    ),
+                    span,
+                );
+                self.out.push('\n');
+                return;
+            }
         }
         self.emit_value(value, span);
         self.out.push('\n');

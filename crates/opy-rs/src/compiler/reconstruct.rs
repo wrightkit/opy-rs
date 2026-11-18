@@ -1241,7 +1241,7 @@ impl<'a> Emitter<'a> {
         self.out.push_str(&Self::indent(level));
         self.out.push_str(target);
         self.out.push_str(" = ");
-        self.set_rhs(target, value, span);
+        self.set_rhs(value, span);
     }
 
     fn render_value_as(
@@ -1617,8 +1617,7 @@ impl<'a> Emitter<'a> {
                 self.out.push('[');
                 self.emit_value(index, arg_span(1));
                 self.out.push_str("] = ");
-                self.emit_value(value, arg_span(2));
-                self.out.push('\n');
+                self.set_rhs(value, arg_span(2));
                 true
             }
             "modifyGlobalVariableAtIndex" | "modifyPlayerVariableAtIndex" => {
