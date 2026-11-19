@@ -1,8 +1,6 @@
 use super::*;
 
 impl Compiler {
-    /// Validate `program` and emit it as Workshop text. The canonical form is
-    /// built once and shared by both validations and emission.
     pub(super) fn validate_and_emit(
         &self,
         program: &Program,

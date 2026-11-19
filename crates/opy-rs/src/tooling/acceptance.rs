@@ -1,8 +1,5 @@
 use crate::{PostCompileHookRecord, compiler::IntegrationError, hir};
 
-/// The compile-stage acceptance pass `check` performs under the active
-/// catalog locale: spelling rejections that `compile` would report surface
-/// here, other integration-stage failures stay `compile`-only diagnostics.
 pub(super) fn compile_stage_spelling_rejection(
     hir: &hir::types::Program,
     hook: Option<PostCompileHookRecord>,
