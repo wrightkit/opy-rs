@@ -21,7 +21,6 @@ impl Lowering<'_> {
         }
         let selector = self.lower_value(value)?;
         let mut case_values = Vec::new();
-        let mut has_default = false;
         let mut case_offsets = Vec::new();
         let mut default_offset = None;
         let mut offset = 0;
@@ -64,12 +63,11 @@ impl Lowering<'_> {
                     (true, lowered)
                 }
                 SwitchArm::Default { body, span } => {
-                    if has_default {
+                    if default_offset.is_some() {
                         return Err(
                             self.unsupported("a switch may contain at most one default arm", *span)
                         );
                     }
-                    has_default = true;
                     default_offset = Some(offset);
                     let lowered = if let Some(bodies) = reverse_bodies.as_mut() {
                         bodies[index].take().unwrap()

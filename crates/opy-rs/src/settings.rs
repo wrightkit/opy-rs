@@ -38,6 +38,9 @@ pub struct SettingsBlock {
 /// span; brace matching respects `"`/`'` strings, `\` escapes, and nesting;
 /// an unterminated block is `settings-invalid`.
 pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
+    if !text.contains("settings") {
+        return Ok(Vec::new());
+    }
     let mut scanner = Cursor::new(text, file_id, Position::new(1, 1));
     let mut blocks = Vec::new();
     let mut in_block_comment = false;
@@ -420,7 +423,7 @@ fn resolve_hir_node(
                     ));
                 };
                 return Err(settings_expression_error(
-                    hir_span_to_diag_span(span),
+                    Span::from_hir(span),
                     format!("settings string '{value}' has format arguments"),
                 ));
             }
@@ -437,21 +440,21 @@ fn eval_settings_text(
     expander: &mut crate::compiler::MacroExpander<'_>,
     lowerer: &mut crate::lower::SettingsLowerer,
 ) -> OpyResult<crate::compile_time::Value> {
-    let diag_span = hir_span_to_diag_span(span);
-    let expression = lowerer
+    let diag_span = Span::from_hir(span);
+    let mut expression = lowerer
         .lower(
             text,
             span.file,
             Position::new(span.start.line, span.start.col),
         )
         .map_err(|error| settings_expression_error(diag_span, error.message))?;
-    let expression = expander
-        .expand_expr(&expression, &HashMap::new(), None)
+    expander
+        .expand_root_expr(&mut expression)
         .map_err(|error| {
             let error_span = error
                 .diagnostic
                 .span
-                .map(hir_span_to_diag_span)
+                .map(Span::from_hir)
                 .unwrap_or(diag_span);
             OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
         })?;
@@ -464,14 +467,6 @@ fn eval_settings_text(
             "expression is not a compile-time value".to_string(),
         )
     })
-}
-
-fn hir_span_to_diag_span(span: hir::Span) -> Span {
-    Span::new(
-        span.file,
-        Position::new(span.start.line, span.start.col),
-        Position::new(span.end.line, span.end.col),
-    )
 }
 
 fn settings_expression_error(span: Span, message: String) -> OpyError {
@@ -502,35 +497,7 @@ fn js_number_value(text: &str) -> Option<f64> {
     {
         return None;
     }
-    // `parseInt(name, 16)`: reads the hex prefix; `NaN` without digits.
-    if let Some(digits) = text.strip_prefix("0x") {
-        let mut value = 0f64;
-        let mut seen = false;
-        for c in digits.chars() {
-            let Some(digit) = c.to_digit(16) else { break };
-            value = value * 16.0 + digit as f64;
-            seen = true;
-        }
-        return Some(if seen { value } else { f64::NAN });
-    }
-    let strict_radix = [("0X", 16), ("0o", 8), ("0O", 8), ("0b", 2), ("0B", 2)]
-        .iter()
-        .find_map(|(prefix, radix)| text.strip_prefix(prefix).map(|digits| (digits, *radix)));
-    if let Some((digits, radix)) = strict_radix {
-        return Some(
-            (!digits.is_empty())
-                .then(|| {
-                    digits.chars().try_fold(0f64, |value, c| {
-                        c.to_digit(radix)
-                            .map(|digit| value * radix as f64 + digit as f64)
-                    })
-                })
-                .flatten()
-                .unwrap_or(f64::NAN),
-        );
-    }
-    // Whole-token `Number(text)`: unparseable tails yield `NaN`.
-    Some(text.parse::<f64>().unwrap_or(f64::NAN))
+    Some(crate::parser::number_token_value(text))
 }
 
 #[derive(Clone, Copy)]
@@ -543,7 +510,7 @@ struct Cursor<'a> {
     file: u32,
 }
 
-impl Cursor<'_> {
+impl<'a> Cursor<'a> {
     fn new(text: &str, file: u32, origin: Position) -> Cursor<'_> {
         Cursor {
             text,
@@ -629,16 +596,12 @@ impl Cursor<'_> {
         }
     }
 
-    fn read_word(&mut self) -> String {
-        let mut word = String::new();
-        while let Some(ch) = self.peek() {
-            if !is_ident_continue(ch) {
-                break;
-            }
-            word.push(ch);
-            self.advance_by(1);
+    fn read_word(&mut self) -> &'a str {
+        let start = self.pos;
+        while self.peek().is_some_and(is_ident_continue) {
+            self.advance();
         }
-        word
+        &self.text[start..self.pos]
     }
 }
 
@@ -962,28 +925,18 @@ impl Cursor<'_> {
         if self.peek() == Some('0')
             && matches!(self.peek_at(1), Some('x' | 'X' | 'o' | 'O' | 'b' | 'B'))
         {
-            text.push(self.advance().unwrap());
+            let digits_start = self.pos;
+            self.advance_by(1);
             let letter = self.advance().expect("radix letter is peeked");
-            text.push(letter);
             let radix = match letter {
                 'x' | 'X' => 16,
                 'o' | 'O' => 8,
                 _ => 2,
             };
-            let mut value = 0f64;
-            let mut digits = 0usize;
-            while let Some(c) = self.peek() {
-                let Some(digit) = c.to_digit(radix) else {
-                    break;
-                };
-                value = value * radix as f64 + digit as f64;
-                digits += 1;
-                text.push(self.advance().unwrap());
+            while self.peek().is_some_and(|c| c.is_digit(radix)) {
+                self.advance();
             }
-            // `Number("0x")`/`parseInt("0x", 16)` is `NaN`; a word tail is
-            // left for `is_expression_continuation` to send to the
-            // expression path (`0x1FZ` is 31 there, `0xZZ` is `NaN`; #512).
-            let value = if digits == 0 { f64::NAN } else { value };
+            let value = crate::parser::number_token_value(&self.text[digits_start..self.pos]);
             return Ok(if text.starts_with('-') { -value } else { value });
         }
         self.take_digits(&mut text);

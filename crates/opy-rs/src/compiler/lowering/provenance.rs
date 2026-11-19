@@ -142,7 +142,7 @@ impl<'a> Lowering<'a> {
     pub(super) fn append_rule(
         &mut self,
         rule_value: workshop_rs::Rule,
-        actions: &[ActionId],
+        selected_actions: &[ActionId],
         span: Option<HirSpan>,
         condition_spans: impl IntoIterator<Item = Option<HirSpan>>,
     ) -> Result<(), IntegrationError> {
@@ -152,11 +152,11 @@ impl<'a> Lowering<'a> {
         for (condition, span) in condition_spans.into_iter().enumerate() {
             self.set_provenance(ProvenanceNode::Condition { rule, condition }, span, None)?;
         }
-        for (action, (span, argument_spans)) in
-            self.action_provenance(actions).into_iter().enumerate()
-        {
+        for (action, id) in selected_actions.iter().copied().enumerate() {
+            let span = self.action_origins[id];
             self.set_provenance(ProvenanceNode::Action { rule, action }, span, None)?;
-            for (argument, span) in argument_spans.into_iter().enumerate() {
+            for argument in 0..self.action_argument_origins[id].len() {
+                let span = self.action_argument_origins[id][argument];
                 if span.is_some() {
                     let node = ProvenanceNode::ActionArgument {
                         rule,

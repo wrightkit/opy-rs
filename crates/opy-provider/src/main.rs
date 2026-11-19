@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
@@ -511,7 +512,7 @@ impl Server {
         };
         let compiler = self.ensure_compiler()?;
         let main_path = path_string(project.filesystem.main_path());
-        let outcome = opy_rs::compile_with_overlay_outcome_with_locale(
+        let mut outcome = opy_rs::compile_with_overlay_outcome_with_locale(
             project.filesystem.source(),
             &main_path,
             project.filesystem.root(),
@@ -525,12 +526,7 @@ impl Server {
             .iter()
             .map(|file| file.path.clone())
             .collect::<Vec<_>>();
-        let accessed = outcome
-            .accessed
-            .iter()
-            .chain(project.filesystem.accessed_paths())
-            .cloned()
-            .collect::<Vec<_>>();
+        let accessed = compile_inputs_negotiated.then(|| std::mem::take(&mut outcome.accessed));
         let (report, mapped) = if format == Some(ArtifactFormat::Mapped) {
             compiler.compile_outcome_report_mapped_with_language(
                 outcome,
@@ -563,8 +559,14 @@ impl Server {
             "artifact": artifact,
             "sourceIdentity": source_identity(&project)?,
         });
-        if compile_inputs_negotiated {
-            result["compileInputs"] = json!(inputs::compile_inputs(display_root, &paths, accessed));
+        if let Some(accessed) = accessed {
+            result["compileInputs"] = json!(inputs::compile_inputs(
+                display_root,
+                &paths,
+                accessed
+                    .into_iter()
+                    .chain(project.filesystem.accessed_paths().iter().cloned()),
+            ));
         }
         Ok(result)
     }
@@ -670,15 +672,23 @@ fn artifact_json(
 fn source_identity(project: &LoadedProject) -> Result<String, HandlerError> {
     let _span = opy_rs::trace::span("source.identity");
     let source = if let Some(path) = effective_primary_source_path(project)? {
-        opy_rs::trace::read_to_string(&path).map_err(|error| HandlerError::Lpp {
-            kind: "providerFailure",
-            details: json!({ "code": "source-identity-read" }),
-            message: format!("cannot read effective primary source: {error}"),
-        })?
+        Cow::Owned(
+            opy_rs::trace::read_to_string(&path).map_err(|error| HandlerError::Lpp {
+                kind: "providerFailure",
+                details: json!({ "code": "source-identity-read" }),
+                message: format!("cannot read effective primary source: {error}"),
+            })?,
+        )
     } else {
-        project.filesystem.source().to_owned()
+        Cow::Borrowed(project.filesystem.source())
     };
-    Ok(hash_source(&source))
+    let digest = Sha256::digest(source.as_bytes());
+    let mut hex = String::with_capacity(digest.len() * 2);
+    use std::fmt::Write as _;
+    for byte in digest {
+        let _ = write!(hex, "{byte:02x}");
+    }
+    Ok(hex)
 }
 
 fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathBuf>, HandlerError> {
@@ -700,16 +710,6 @@ fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathB
             message: format!("cannot resolve effective primary source: {error}"),
         })?;
     Ok(Some(path))
-}
-
-fn hash_source(source: &str) -> String {
-    Sha256::digest(source.as_bytes())
-        .iter()
-        .fold(String::new(), |mut hex, byte| {
-            use std::fmt::Write as _;
-            let _ = write!(hex, "{byte:02x}");
-            hex
-        })
 }
 
 fn load_project(
@@ -924,6 +924,20 @@ pub(crate) fn effective_entry(document: &Document, path: &Path) -> PathBuf {
     }
 }
 
+fn documents_by_entry(
+    documents: &BTreeMap<String, Document>,
+) -> Result<BTreeMap<PathBuf, Vec<&Document>>, HandlerError> {
+    let mut groups: BTreeMap<PathBuf, Vec<&Document>> = BTreeMap::new();
+    for document in documents.values() {
+        let path = document_path(document)?;
+        groups
+            .entry(effective_entry(document, &path))
+            .or_default()
+            .push(document);
+    }
+    Ok(groups)
+}
+
 fn include_remainder(target: &str) -> PathBuf {
     let mut parts: Vec<&str> = Vec::new();
     for part in target.split('/') {
@@ -946,14 +960,7 @@ fn check_documents(
     let overlays = document_overlays(documents)?;
     let mut diagnostics_by_uri = empty_diagnostics(documents);
 
-    let mut groups: BTreeMap<PathBuf, Vec<&Document>> = BTreeMap::new();
-    for document in documents.values() {
-        let path = document_path(document)?;
-        groups
-            .entry(effective_entry(document, &path))
-            .or_default()
-            .push(document);
-    }
+    let groups = documents_by_entry(documents)?;
 
     let canonical = edits::normalized;
     let supplied: BTreeSet<PathBuf> = documents
@@ -997,48 +1004,40 @@ fn check_documents(
 
     let mut deferred: Vec<&Document> = Vec::new();
     let mut covered: BTreeSet<PathBuf> = BTreeSet::new();
-    let mut run_check = |representative: &Document,
-                         covered: &mut BTreeSet<PathBuf>|
-     -> Result<(), HandlerError> {
-        let path = document_path(representative)?;
-        let root = path
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
-        let outcome = opy_rs::tooling::check_with_overlay_and_locale(
-            &representative.text,
-            &path_string(&path),
-            &root,
-            &overlays,
-            &locale,
-        );
-        if outcome.is_clean() {
-            covered.extend(
-                outcome
-                    .files
-                    .iter()
-                    .map(|file| canonical(&resolved_path(&outcome.display_root, &file.path))),
+    let mut run_check =
+        |representative: &Document, covered: &mut BTreeSet<PathBuf>| -> Result<(), HandlerError> {
+            let path = document_path(representative)?;
+            let root = path
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from("."));
+            let outcome = opy_rs::tooling::check_with_overlay_and_locale(
+                &representative.text,
+                &path_string(&path),
+                &root,
+                &overlays,
+                &locale,
             );
-        }
-        for diagnostic in &outcome.diagnostics {
-            let target_uri = diagnostic
-                .span
-                .as_ref()
-                .and_then(|span| {
-                    edits::supplied_document_for_path(documents, &outcome.display_root, &span.path)
-                        .map(|document| document.uri.clone())
-                })
-                .unwrap_or_else(|| representative.uri.clone());
-            let value = diagnostic_json_for_documents(documents, &outcome.display_root, diagnostic);
-            let target = diagnostics_by_uri
-                .get_mut(&target_uri)
-                .expect("diagnostic target is a supplied document");
-            if !target.contains(&value) {
-                target.push(value);
+            if outcome.is_clean() {
+                covered.extend(
+                    outcome
+                        .files
+                        .iter()
+                        .map(|file| canonical(&resolved_path(&outcome.display_root, &file.path))),
+                );
             }
-        }
-        Ok(())
-    };
+            for diagnostic in &outcome.diagnostics {
+                let (target_uri, value) =
+                    document_diagnostic(documents, &outcome.display_root, diagnostic);
+                let target = diagnostics_by_uri
+                    .get_mut(target_uri.unwrap_or(&representative.uri))
+                    .expect("diagnostic target is a supplied document");
+                if !target.contains(&value) {
+                    target.push(value);
+                }
+            }
+            Ok(())
+        };
 
     for (entry, members) in groups {
         let representative = members
@@ -1089,26 +1088,12 @@ fn compile_document(
     );
     let mut diagnostics_by_uri = empty_diagnostics(&request.documents);
     for diagnostic in &outcome.diagnostics {
-        let target_uri = diagnostic
-            .span
-            .as_ref()
-            .and_then(|span| {
-                edits::supplied_document_for_path(
-                    &request.documents,
-                    &outcome.display_root,
-                    &span.path,
-                )
-                .map(|document| document.uri.clone())
-            })
-            .unwrap_or_else(|| uri.clone());
+        let (target_uri, value) =
+            document_diagnostic(&request.documents, &outcome.display_root, diagnostic);
         diagnostics_by_uri
-            .get_mut(&target_uri)
+            .get_mut(target_uri.unwrap_or(uri))
             .expect("diagnostic target is a supplied document")
-            .push(diagnostic_json_for_documents(
-                &request.documents,
-                &outcome.display_root,
-                diagnostic,
-            ));
+            .push(value);
     }
     let artifact = match outcome.hir.as_ref() {
         Some(hir) => {
@@ -1195,32 +1180,32 @@ fn same_path(left: &Path, right: &Path) -> bool {
     edits::normalized(left) == edits::normalized(right)
 }
 
-fn diagnostic_json_for_documents(
-    documents: &BTreeMap<String, Document>,
+fn document_diagnostic<'a>(
+    documents: &'a BTreeMap<String, Document>,
     display_root: &Path,
     diagnostic: &OpyDiagnostic,
-) -> Value {
-    diagnostic_json(
+) -> (Option<&'a str>, Value) {
+    let document = diagnostic
+        .span
+        .as_ref()
+        .and_then(|span| edits::supplied_document_for_path(documents, display_root, &span.path));
+    let value = diagnostic_json(
         diagnostic.span.as_ref(),
         &diagnostic.severity,
         &diagnostic.code,
         &diagnostic.message,
-        |path, line, col| document_lsp_position(documents, display_root, path, line, col),
-    )
-}
-
-fn document_lsp_position(
-    documents: &BTreeMap<String, Document>,
-    display_root: &Path,
-    path: &str,
-    line: u32,
-    col: u32,
-) -> Value {
-    let source = edits::supplied_document_for_path(documents, display_root, path)
-        .map(|document| document.text.clone())
-        .or_else(|| std::fs::read_to_string(resolved_path(display_root, path)).ok())
-        .unwrap_or_default();
-    lsp_position(&source, line, col)
+        |path| {
+            document.map_or_else(
+                || {
+                    Cow::Owned(
+                        fs::read_to_string(resolved_path(display_root, path)).unwrap_or_default(),
+                    )
+                },
+                |document| Cow::Borrowed(document.text.as_str()),
+            )
+        },
+    );
+    (document.map(|document| document.uri.as_str()), value)
 }
 
 fn check_result(project: &LoadedProject, outcome: &CheckOutcome) -> Value {
@@ -1288,13 +1273,17 @@ fn push_diagnostic(
     let index = path
         .and_then(|path| entries.iter().position(|entry| entry.path == path))
         .unwrap_or(0);
-    entries[index].diagnostics.push(diagnostic_json(
-        span,
-        severity,
-        code,
-        message,
-        |path, line, col| project_lsp_position(project, display_root, path, line, col),
-    ));
+    entries[index]
+        .diagnostics
+        .push(diagnostic_json(span, severity, code, message, |path| {
+            if path == project.filesystem.main_path().to_string_lossy() {
+                Cow::Borrowed(project.filesystem.source())
+            } else {
+                Cow::Owned(
+                    fs::read_to_string(resolved_path(display_root, path)).unwrap_or_default(),
+                )
+            }
+        }));
 }
 
 #[derive(Debug)]
@@ -1330,15 +1319,24 @@ fn file_entries(project: &LoadedProject, paths: &[String]) -> Vec<FileEntry> {
         .collect()
 }
 
-fn diagnostic_json(
+fn diagnostic_json<'a>(
     location: Option<&SourceLocation>,
     severity: &opy_rs::tooling::DiagnosticSeverity,
     code: &str,
     message: &str,
-    position_for: impl Fn(&str, u32, u32) -> Value,
+    source_for: impl FnOnce(&str) -> Cow<'a, str>,
 ) -> Value {
+    let range = location.map_or_else(
+        || {
+            json!({
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 0 },
+            })
+        },
+        |location| lsp_range(&source_for(&location.path), location),
+    );
     json!({
-        "range": diagnostic_range(location, position_for),
+        "range": range,
         "severity": severity.as_str(),
         "code": code,
         "message": message,
@@ -1346,39 +1344,16 @@ fn diagnostic_json(
     })
 }
 
-fn diagnostic_range(
-    location: Option<&SourceLocation>,
-    position_for: impl Fn(&str, u32, u32) -> Value,
-) -> Value {
-    let Some(location) = location else {
-        return json!({
-            "start": { "line": 0, "character": 0 },
-            "end": { "line": 0, "character": 0 },
-        });
-    };
+fn lsp_range(text: &str, location: &SourceLocation) -> Value {
+    let source = edits::SourceText::new(text);
     json!({
-        "start": position_for(&location.path, location.start.line, location.start.col),
-        "end": position_for(&location.path, location.end.line, location.end.col),
+        "start": lsp_position(&source, location.start.line, location.start.col),
+        "end": lsp_position(&source, location.end.line, location.end.col),
     })
 }
 
-fn project_lsp_position(
-    project: &LoadedProject,
-    display_root: &Path,
-    path: &str,
-    line: u32,
-    col: u32,
-) -> Value {
-    let source = if path == path_string(project.filesystem.main_path()) {
-        project.filesystem.source().to_owned()
-    } else {
-        std::fs::read_to_string(resolved_path(display_root, path)).unwrap_or_default()
-    };
-    lsp_position(&source, line, col)
-}
-
-fn lsp_position(source: &str, line: u32, col: u32) -> Value {
-    let character = edits::SourceText::new(source)
+fn lsp_position(source: &edits::SourceText<'_>, line: u32, col: u32) -> Value {
+    let character = source
         .line_text(line.saturating_sub(1) as usize)
         .map(|text| edits::utf16_character(text, col))
         .unwrap_or_else(|| col.saturating_sub(1));

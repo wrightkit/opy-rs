@@ -42,10 +42,11 @@ impl<'a> Lowering<'a> {
         let lowered_actions = self.lower_actions(&rule.actions, None);
         self.current_rule_conditions = previous_conditions;
         let actions = lowered_actions?;
+        let selected_actions = self.useful_actions(&actions);
         let optimization = self.optimization_state_at(rule.span.as_ref());
         if optimization.enabled
             && !rule.delimiter
-            && !self.has_meaningful_rule_action(&self.useful_actions(&actions), &event)
+            && !self.has_meaningful_rule_action(&selected_actions, &event)
         {
             return Ok(());
         }
@@ -64,30 +65,10 @@ impl<'a> Lowering<'a> {
             rule.disabled,
             event,
             conditions,
-            self.public_actions(&actions),
+            self.materialize_selected_actions(&selected_actions),
         );
-        self.append_rule(value, &actions, rule.span, condition_spans)?;
+        self.append_rule(value, &selected_actions, rule.span, condition_spans)?;
         Ok(())
-    }
-
-    fn split_rule_condition<'expr>(expr: &'expr Expr, conditions: &mut Vec<&'expr Expr>) {
-        match expr {
-            Expr::Binary {
-                op, left, right, ..
-            } if op == "and" => {
-                Self::split_rule_condition(left, conditions);
-                Self::split_rule_condition(right, conditions);
-            }
-            Expr::Binary {
-                op, left, right, ..
-            } if op == "=="
-                && matches!(right.as_ref(), Expr::Bool { value: true, .. })
-                && matches!(left.as_ref(), Expr::Binary { op, .. } if op == "and") =>
-            {
-                Self::split_rule_condition(left, conditions);
-            }
-            _ => conditions.push(expr),
-        }
     }
 
     fn has_meaningful_rule_action(&self, actions: &[ActionId], event: &Event) -> bool {
@@ -146,14 +127,15 @@ impl<'a> Lowering<'a> {
         {
             return Ok(());
         }
+        let selected_actions = self.useful_actions(&actions);
         let value = rule_from_parts(
             self.subroutine_rule_name(name),
             false,
             event,
             Vec::new(),
-            self.public_actions(&actions),
+            self.materialize_selected_actions(&selected_actions),
         );
-        self.append_rule(value, &actions, span, std::iter::empty())?;
+        self.append_rule(value, &selected_actions, span, std::iter::empty())?;
         Ok(())
     }
 
@@ -1391,7 +1373,7 @@ impl<'a> Lowering<'a> {
         actions: &[ActionId],
         fallback_span: Option<HirSpan>,
     ) -> Result<usize, IntegrationError> {
-        let public_actions = self.public_actions(actions);
+        let public_actions = self.materialize_selected_actions(&self.useful_actions(actions));
         let mut program = workshop_rs::Program::new();
         program.global_variables = self.program.global_variables.clone();
         program.player_variables = self.program.player_variables.clone();

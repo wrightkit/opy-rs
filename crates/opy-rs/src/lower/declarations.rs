@@ -1,5 +1,25 @@
 use super::*;
 
+pub(super) struct EnumDeclaration {
+    order: usize,
+    members: Vec<EnumMember>,
+}
+
+/// The auto-increment state of a custom enum while its members are
+/// collected. The reference tracks `lastIntValue` the same way: `= n`
+/// reseeds the counter at `n + 1`, `= -n` yields `-n + 1` for the next
+/// bare member, and any other explicit value breaks the numeric chain.
+#[derive(Debug, Clone, Copy)]
+enum EnumCounter {
+    Number(f64),
+    /// `= -<number>` keeps the negated literal so the next bare member
+    /// resolves to `-n + 1`.
+    Negated(f64),
+    /// The previous member had a non-numeric explicit value; the next
+    /// bare member is a hard error.
+    Other,
+}
+
 fn declaration_visible(
     declarations: &HashMap<String, usize>,
     name: &str,
@@ -137,10 +157,10 @@ impl Lowerer {
                     }
                 }
                 Decl::Enum { name, members, .. } => {
-                    self.enum_declarations.entry(name.clone()).or_insert(order);
                     if !self.enums.contains_key(name) {
-                        let resolved = self.enum_members(members);
-                        self.enums.insert(name.clone(), resolved);
+                        let members = self.enum_members(members);
+                        self.enums
+                            .insert(name.clone(), EnumDeclaration { order, members });
                     }
                 }
                 Decl::Macro { name, .. } => {
@@ -152,27 +172,23 @@ impl Lowerer {
             let TopLevel::Rule(CstRuleEntry::SubroutineDef { name, span, .. }) = item else {
                 continue;
             };
-            if self
-                .subroutine_definitions
-                .iter()
-                .any(|(defined, _)| defined == name)
+            if let std::collections::hash_map::Entry::Vacant(entry) =
+                self.subroutine_definitions.entry(name.clone())
             {
+                entry.insert(order);
+            } else {
                 self.error_at(
                     "duplicate-definition",
                     format!("duplicate subroutine definition '{name}'"),
                     *span,
                 );
             }
-            self.subroutine_definitions.push((name.clone(), order));
         }
     }
 
     pub(super) fn subroutine_visible(&self, name: &str) -> bool {
         declaration_visible(&self.subroutine_declarations, name, self.current_order)
-            || self
-                .subroutine_definitions
-                .iter()
-                .any(|(definition, order)| definition == name && *order <= self.current_order)
+            || declaration_visible(&self.subroutine_definitions, name, self.current_order)
     }
 
     pub(super) fn global_visible(&self, name: &str) -> bool {
@@ -191,8 +207,11 @@ impl Lowerer {
         declaration_visible(&self.constant_declarations, name, self.current_order)
     }
 
-    pub(super) fn enum_visible(&self, name: &str) -> bool {
-        declaration_visible(&self.enum_declarations, name, self.current_order)
+    pub(super) fn visible_enum_members(&self, name: &str) -> Option<&[EnumMember]> {
+        self.enums
+            .get(name)
+            .filter(|entry| entry.order <= self.current_order)
+            .map(|entry| entry.members.as_slice())
     }
 
     fn global_initializer(
@@ -277,9 +296,9 @@ impl Lowerer {
     pub(super) fn initializer(&mut self, initializer: Option<&Expr>) -> Option<Box<HirExpr>> {
         let initializer = initializer?;
         let lowered = self.lower_expr(initializer, &[], CallPosition::Value);
-        match &lowered {
+        match lowered {
             HirExpr::Number { text, .. } if text == "0" => None,
-            other => Some(Box::new(other.clone())),
+            other => Some(Box::new(other)),
         }
     }
 

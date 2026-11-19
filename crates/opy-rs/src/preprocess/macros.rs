@@ -48,7 +48,7 @@ impl LineOffsets {
     }
 }
 
-impl Preprocessor {
+impl Preprocessor<'_> {
     pub(super) fn define(&mut self, rest: &str, span: Span, is_member: bool) -> OpyResult<()> {
         let rest = rest.trim();
         let first_open = rest.find('(').unwrap_or(rest.len());
@@ -221,35 +221,26 @@ impl Preprocessor {
         open: usize,
     ) -> OpyResult<(Vec<MacroArgument>, usize)> {
         let mut args: Vec<MacroArgument> = Vec::new();
-        let mut current: Vec<Token> = Vec::new();
+        let mut arg_start = open + 1;
         let mut depth = 0usize;
-        let mut cursor = open + 1;
-        while cursor < tokens.len() {
-            let kind = tokens[cursor].kind;
-            if matches!(
-                kind,
-                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace
-            ) {
-                depth += 1;
-                current.push(tokens[cursor].clone());
-            } else if kind == TokenKind::RParen {
-                if depth == 0 {
-                    if !current.is_empty() || !args.is_empty() {
-                        args.push(self.finish_argument(std::mem::take(&mut current)));
+        for (cursor, token) in tokens.iter().enumerate().skip(open + 1) {
+            match token.kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen if depth == 0 => {
+                    if arg_start != cursor || !args.is_empty() {
+                        args.push(self.finish_argument(&tokens[arg_start..cursor]));
                     }
                     return Ok((args, cursor + 1));
                 }
-                depth -= 1;
-                current.push(tokens[cursor].clone());
-            } else if matches!(kind, TokenKind::RBracket | TokenKind::RBrace) {
-                depth = depth.saturating_sub(1);
-                current.push(tokens[cursor].clone());
-            } else if kind == TokenKind::Comma && depth == 0 {
-                args.push(self.finish_argument(std::mem::take(&mut current)));
-            } else {
-                current.push(tokens[cursor].clone());
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth = depth.saturating_sub(1);
+                }
+                TokenKind::Comma if depth == 0 => {
+                    args.push(self.finish_argument(&tokens[arg_start..cursor]));
+                    arg_start = cursor + 1;
+                }
+                _ => {}
             }
-            cursor += 1;
         }
         Err(OpyError::new(
             "macro-invalid",
@@ -257,16 +248,15 @@ impl Preprocessor {
         ))
     }
 
-    fn finish_argument(&self, tokens: Vec<Token>) -> MacroArgument {
-        let raw = self
-            .raw_source_text(&tokens)
-            .unwrap_or_else(|| raw_arg_text(&tokens));
-        MacroArgument {
-            raw: raw.trim().to_string(),
-        }
+    fn finish_argument(&self, tokens: &[Token]) -> MacroArgument {
+        let raw = self.raw_source_text(tokens).map_or_else(
+            || raw_arg_text(tokens).trim().to_string(),
+            |text| text.trim().to_string(),
+        );
+        MacroArgument { raw }
     }
 
-    fn raw_source_text(&self, tokens: &[Token]) -> Option<String> {
+    fn raw_source_text(&self, tokens: &[Token]) -> Option<&str> {
         let first = tokens.first()?.span;
         let last = tokens.last()?.span;
         if first.file != last.file {
@@ -279,16 +269,13 @@ impl Preprocessor {
             .or_insert_with(|| LineOffsets::new(source));
         let start = offsets.offset_of(source, first.start)?;
         let end = offsets.offset_of(source, last.end)?;
-        let raw = source.get(start..end)?.to_string();
-        let lexed = lex(LexInput {
+        let raw = source.get(start..end)?;
+        let mut lexed = lex(LexInput {
             file_id: first.file,
-            text: &raw,
+            text: raw,
         })
         .ok()?;
-        let lexed: Vec<Token> = lexed
-            .into_iter()
-            .filter(|token| token.kind != TokenKind::Eof)
-            .collect();
+        lexed.retain(|token| token.kind != TokenKind::Eof);
         (lexed.len() == tokens.len()
             && lexed
                 .iter()
@@ -321,11 +308,8 @@ impl Preprocessor {
         }
         let mut replacement = mac.body_text.clone();
         if mac.is_function {
-            for (index, param) in mac.params.iter().enumerate() {
-                let argument = args
-                    .get(index)
-                    .map_or_else(String::new, |argument| argument.raw.clone());
-                replacement = replace_identifier(&replacement, param, &argument);
+            for (param, argument) in mac.params.iter().zip(&args) {
+                replacement = replace_identifier(&replacement, param, &argument.raw);
             }
         }
         replacement = replacement.replace("\\\n", "\n");
@@ -386,7 +370,7 @@ impl Preprocessor {
                 };
                 let mut expanded =
                     self.expand_macro(mac, args, token, line_indent(tokens, index))?;
-                stack.push(name.clone());
+                stack.push(name);
                 self.expand_into(&mut expanded, stack, depth + 1)?;
                 stack.pop();
                 out.append(&mut expanded);
@@ -428,11 +412,8 @@ fn raw_arg_text(tokens: &[Token]) -> String {
 
 pub(super) fn attribute_expansion_spans(tokens: &mut [Token], use_site: &Token) {
     for token in tokens {
-        token.layout = Span::new(
-            use_site.span.file,
-            crate::diag::shift_position(token.span.start, use_site.layout.start),
-            crate::diag::shift_position(token.span.end, use_site.layout.start),
-        );
+        token.layout = token.span.shifted(use_site.layout.start);
+        token.layout.file = use_site.span.file;
         token.span = use_site.span;
     }
 }
@@ -452,13 +433,13 @@ pub(crate) fn expand_define_text(text: &str, macros: &[MacroDef]) -> Result<Stri
     for _ in 0..64 {
         let mut changed = false;
         for mac in macros {
-            if mac.script.is_some() {
+            if mac.script.is_some() || !out.contains(&mac.name) {
                 continue;
             }
             let next = if mac.is_function {
                 expand_function_define(&out, mac)
             } else {
-                replace_identifier_unquoted(&out, &mac.name, &mac.body_text)
+                replace_identifier_impl(&out, &mac.name, &mac.body_text, true)
             };
             if next != out {
                 out = next;
@@ -488,43 +469,17 @@ fn quoted_literal_end(chars: &[char], start: usize) -> usize {
     chars.len()
 }
 
-/// [`replace_identifier`] restricted to positions outside quoted string
-/// literals: upstream define expansion is token-level, so occurrences
-/// inside a nested literal are literal text.
-fn replace_identifier_unquoted(source: &str, identifier: &str, replacement: &str) -> String {
-    let source_chars: Vec<char> = source.chars().collect();
-    let identifier_chars: Vec<char> = identifier.chars().collect();
-    if identifier_chars.is_empty() {
-        return source.to_string();
-    }
-    let mut result = String::with_capacity(source.len());
-    let mut index = 0;
-    while index < source_chars.len() {
-        if matches!(source_chars[index], '"' | '\'') {
-            let end = quoted_literal_end(&source_chars, index);
-            result.extend(&source_chars[index..end]);
-            index = end;
-            continue;
-        }
-        let end = index + identifier_chars.len();
-        if end <= source_chars.len()
-            && source_chars[index..end] == identifier_chars
-            && !index
-                .checked_sub(1)
-                .and_then(|position| source_chars.get(position).copied())
-                .is_some_and(crate::lexer::is_ident_continue)
-            && !source_chars
-                .get(end)
-                .is_some_and(|character| crate::lexer::is_ident_continue(*character))
-        {
-            result.push_str(replacement);
-            index = end;
-        } else {
-            result.push(source_chars[index]);
-            index += 1;
-        }
-    }
-    result
+fn identifier_at(source: &[char], start: usize, identifier: &[char]) -> bool {
+    let end = start + identifier.len();
+    source.get(start..end) == Some(identifier)
+        && !start
+            .checked_sub(1)
+            .and_then(|previous| source.get(previous).copied())
+            .is_some_and(crate::lexer::is_ident_continue)
+        && !source
+            .get(end)
+            .copied()
+            .is_some_and(crate::lexer::is_ident_continue)
 }
 
 fn expand_function_define(text: &str, mac: &MacroDef) -> String {
@@ -537,16 +492,7 @@ fn expand_function_define(text: &str, mac: &MacroDef) -> String {
             continue;
         }
         let end = index + name.len();
-        if end <= chars.len()
-            && chars[index..end] == name[..]
-            && !index
-                .checked_sub(1)
-                .and_then(|position| chars.get(position).copied())
-                .is_some_and(crate::lexer::is_ident_continue)
-            && !chars
-                .get(end)
-                .is_some_and(|character| crate::lexer::is_ident_continue(*character))
-        {
+        if identifier_at(&chars, index, &name) {
             let mut cursor = end;
             while chars.get(cursor).is_some_and(|c| c.is_whitespace()) {
                 cursor += 1;
@@ -620,8 +566,8 @@ fn expand_function_define(text: &str, mac: &MacroDef) -> String {
             }
             let mut replacement = mac.body_text.clone();
             for (position, param) in mac.params.iter().enumerate() {
-                let argument = args.get(position).cloned().unwrap_or_default();
-                replacement = replace_identifier(&replacement, param, &argument);
+                let argument = args.get(position).map_or("", String::as_str);
+                replacement = replace_identifier(&replacement, param, argument);
             }
             let mut out = String::with_capacity(text.len() + replacement.len());
             out.extend(&chars[..index]);
@@ -635,27 +581,30 @@ fn expand_function_define(text: &str, mac: &MacroDef) -> String {
 }
 
 pub(crate) fn replace_identifier(source: &str, identifier: &str, replacement: &str) -> String {
-    let source_chars: Vec<char> = source.chars().collect();
-    let identifier_chars: Vec<char> = identifier.chars().collect();
-    if identifier_chars.is_empty() {
+    replace_identifier_impl(source, identifier, replacement, false)
+}
+
+fn replace_identifier_impl(
+    source: &str,
+    identifier: &str,
+    replacement: &str,
+    skip_quoted: bool,
+) -> String {
+    if identifier.is_empty() || !source.contains(identifier) {
         return source.to_string();
     }
+    let source_chars: Vec<char> = source.chars().collect();
+    let identifier_chars: Vec<char> = identifier.chars().collect();
     let mut result = String::with_capacity(source.len());
     let mut index = 0;
     while index < source_chars.len() {
-        let end = index + identifier_chars.len();
-        if end <= source_chars.len()
-            && source_chars[index..end] == identifier_chars
-            && !index
-                .checked_sub(1)
-                .and_then(|position| source_chars.get(position).copied())
-                .is_some_and(crate::lexer::is_ident_continue)
-            && !source_chars
-                .get(end)
-                .is_some_and(|character| crate::lexer::is_ident_continue(*character))
-        {
-            result.push_str(replacement);
+        if skip_quoted && matches!(source_chars[index], '"' | '\'') {
+            let end = quoted_literal_end(&source_chars, index);
+            result.extend(&source_chars[index..end]);
             index = end;
+        } else if identifier_at(&source_chars, index, &identifier_chars) {
+            result.push_str(replacement);
+            index += identifier_chars.len();
         } else {
             result.push(source_chars[index]);
             index += 1;

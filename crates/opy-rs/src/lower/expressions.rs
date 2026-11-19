@@ -315,7 +315,7 @@ impl Lowerer {
                 name: name.to_string(),
                 span: Some(span.into()),
             },
-            _ if self.enum_visible(name) => {
+            _ if self.visible_enum_members(name).is_some() => {
                 self.error_at(
                     "enum-type-without-member",
                     format!("enum type '{name}' must be used with a member (e.g. {name}.MEMBER)"),
@@ -366,11 +366,10 @@ impl Lowerer {
                 "AsyncBehavior" => "StartRuleBehavior",
                 other => other,
             };
-            if self.enum_visible(enum_name) {
-                let member_value = self
-                    .enums
-                    .get(enum_name)
-                    .and_then(|members| members.iter().find(|entry| entry.name == member))
+            if let Some(members) = self.visible_enum_members(enum_name) {
+                let member_value = members
+                    .iter()
+                    .find(|entry| entry.name == member)
                     .map(|entry| entry.value.clone());
                 if let Some(value) = member_value {
                     return match value {
@@ -384,13 +383,8 @@ impl Lowerer {
                         }
                     };
                 }
-                let pool = crate::matcher::bare_candidates(
-                    self.enums
-                        .get(enum_name)
-                        .expect("enum span and members agree")
-                        .iter()
-                        .map(|entry| entry.name.clone()),
-                );
+                let pool =
+                    crate::matcher::bare_candidates(members.iter().map(|entry| entry.name.clone()));
                 self.error_at_closed_candidates(
                     "unknown-enum-member",
                     format!("enum '{name}' has no member '{member}'"),

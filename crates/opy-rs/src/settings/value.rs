@@ -1,5 +1,5 @@
 use super::map_variants;
-use crate::diag::OpyResult;
+use crate::diag::{OpyResult, Span};
 use crate::hir;
 
 /// A settings node from an evaluated compile-time value; `scope` tracks
@@ -10,7 +10,7 @@ pub(super) fn node_from_value(
     source_span: hir::Span,
     scope: u8,
 ) -> OpyResult<hir::SettingsNode> {
-    let span = super::hir_span_to_diag_span(source_span);
+    let span = Span::from_hir(source_span);
     let node = match value {
         // `String(numValue)` writes `NaN`/`Infinity` literally upstream —
         // `x: 5%0` is `x: NaN` and `x: Infinity` is `x: Infinity` (#512).

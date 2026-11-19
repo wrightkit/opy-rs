@@ -59,7 +59,7 @@ impl From<&Span> for crate::hir::Span {
     }
 }
 
-pub(crate) fn shift_position(position: Position, origin: Position) -> Position {
+fn shift_position(position: Position, origin: Position) -> Position {
     Position::new(
         origin.line + position.line.saturating_sub(1),
         if position.line == 1 {
@@ -73,6 +73,22 @@ pub(crate) fn shift_position(position: Position, origin: Position) -> Position {
 impl Span {
     pub fn new(file: u32, start: Position, end: Position) -> Span {
         Span { file, start, end }
+    }
+
+    pub(crate) fn shifted(self, origin: Position) -> Self {
+        Self::new(
+            self.file,
+            shift_position(self.start, origin),
+            shift_position(self.end, origin),
+        )
+    }
+
+    pub(crate) fn from_hir(span: crate::hir::Span) -> Self {
+        Self::new(
+            span.file,
+            Position::new(span.start.line, span.start.col),
+            Position::new(span.end.line, span.end.col),
+        )
     }
 }
 

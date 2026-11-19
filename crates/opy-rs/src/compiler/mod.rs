@@ -636,35 +636,22 @@ impl Compiler {
         };
 
         let compiled = if mapped {
-            self.compile_hir_mapped_with_hook(&hir, outcome.post_compile_hook, locale)
+            self.compile_hir_mapped_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)
                 .map(|(artifact, mapped)| (artifact, Some(mapped)))
         } else {
             self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)
                 .map(|artifact| (artifact, None))
         };
+        let compiled = compiled.and_then(|(artifact, mapped)| {
+            let _span = crate::trace::span("translations.write");
+            write_translation_files(root, &hir, &artifact.translation_files)?;
+            Ok((artifact, mapped))
+        });
         match compiled {
-            Ok((artifact, mapped)) => {
-                let written = {
-                    let _span = crate::trace::span("translations.write");
-                    write_translation_files(root, &hir, &artifact.translation_files)
-                };
-                match written {
-                    Ok(()) => (
-                        CompileReport::success(compiler, catalog, artifact, frontend_diagnostics),
-                        mapped,
-                    ),
-                    Err(error) => (
-                        integration_failure_report(
-                            compiler,
-                            catalog,
-                            frontend_diagnostics,
-                            error,
-                            &hir.files,
-                        ),
-                        None,
-                    ),
-                }
-            }
+            Ok((artifact, mapped)) => (
+                CompileReport::success(compiler, catalog, artifact, frontend_diagnostics),
+                mapped,
+            ),
             Err(error) => (
                 integration_failure_report(
                     compiler,

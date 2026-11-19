@@ -2,7 +2,7 @@ use crate::macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
 
 use super::*;
 
-impl Preprocessor {
+impl Preprocessor<'_> {
     pub(super) fn resolve_script(
         &mut self,
         path: &str,
@@ -18,12 +18,12 @@ impl Preprocessor {
         let overlay_source = self
             .overlay
             .get(&path)
-            .or_else(|| self.overlay.get(&candidate.to_string_lossy().into_owned()))
+            .or_else(|| self.overlay.get(candidate.to_string_lossy().as_ref()))
             .or_else(|| self.overlay.get(&resolved_path))
             .or_else(|| {
                 canonical
                     .as_ref()
-                    .and_then(|path| self.overlay.get(&path.to_string_lossy().into_owned()))
+                    .and_then(|path| self.overlay.get(path.to_string_lossy().as_ref()))
             })
             .cloned();
         let source = match overlay_source {
@@ -73,8 +73,8 @@ impl Preprocessor {
         let macro_args: Vec<MacroArg> = mac
             .params
             .iter()
-            .zip(args.iter())
-            .map(|(param, argument)| MacroArg::new(param.clone(), argument.raw.clone()))
+            .zip(args)
+            .map(|(param, argument)| MacroArg::new(param.clone(), argument.raw))
             .collect();
         let runtime = MacroRuntime::new(Limits::default());
         let result = runtime

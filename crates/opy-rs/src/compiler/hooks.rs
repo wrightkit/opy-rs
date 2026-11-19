@@ -52,16 +52,4 @@ impl Compiler {
         }
         Ok((artifact, attributed_program))
     }
-
-    /// [`Self::compile_hir_with_locale_and_hook`], and on success also
-    /// returns the mapped Workshop text of the same compile. This is an
-    /// advanced integration API.
-    pub fn compile_hir_mapped_with_locale_and_hook(
-        &self,
-        hir: &hir::Program,
-        hook: Option<crate::PostCompileHookRecord>,
-        locale: &Locale,
-    ) -> Result<(CompilationArtifact, MappedText), IntegrationError> {
-        self.compile_hir_mapped_with_hook(hir, hook, locale)
-    }
 }

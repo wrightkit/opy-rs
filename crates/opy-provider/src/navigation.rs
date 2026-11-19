@@ -13,7 +13,7 @@ use crate::edits::{
     overlay_map, token_range,
 };
 use crate::{
-    Document, HandlerError, document_path, effective_entry, lsp_position, path_string,
+    Document, HandlerError, document_path, documents_by_entry, lsp_range, path_string,
     path_to_file_uri, resolved_path, same_path, validate_documents,
 };
 
@@ -137,10 +137,7 @@ fn site_range(text: &str, site: &SourceLocation, token: Option<SiteToken>) -> Va
     if let Some(token) = token {
         return token_range(&SourceText::new(text), token);
     }
-    json!({
-        "start": lsp_position(text, site.start.line, site.start.col),
-        "end": lsp_position(text, site.end.line, site.end.col),
-    })
+    lsp_range(text, site)
 }
 
 fn compare_by_range_start(a: &Value, b: &Value) -> std::cmp::Ordering {
@@ -258,14 +255,7 @@ pub(crate) fn symbols(params: Value) -> Result<Value, HandlerError> {
     validate_documents(&documents)?;
     let overlay = overlay_map(&documents, None)?;
 
-    let mut groups: BTreeMap<PathBuf, Vec<&Document>> = BTreeMap::new();
-    for document in documents.values() {
-        let path = document_path(document)?;
-        groups
-            .entry(effective_entry(document, &path))
-            .or_default()
-            .push(document);
-    }
+    let groups = documents_by_entry(&documents)?;
     let mut outcomes: Vec<CheckOutcome> = Vec::with_capacity(groups.len());
     for (entry, members) in &groups {
         let representative = members
