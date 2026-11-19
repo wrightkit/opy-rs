@@ -2,10 +2,6 @@ use std::path::Path;
 
 use crate::Compiler;
 
-/// Macro shapes whose expansion reaches lowering decisions: a body that
-/// crosses an optimization directive, span-less nodes inside a body and in
-/// substituted arguments, a macro call as an argument, and self-referencing
-/// assignments that may lower to a modify action.
 const SOURCE: &str = "playervar foo
 globalvar a
 globalvar g
@@ -40,9 +36,6 @@ rule \"r\":
     eventPlayer.foo = outer(eventPlayer.foo)
 ";
 
-/// Arguments of a macro call written in a `#!define` body carry the define
-/// invocation span, which is also the call's site. Rule "before" is
-/// optimized and rule "after" is not.
 const DEFINE_SOURCE: &str = "globalvar g
 
 macro setv(v):
@@ -67,7 +60,6 @@ rule \"after\":
     CALLPICK
 ";
 
-/// Indexed self-assignment where the array and the index come from macros.
 const INDEX_SOURCE: &str = "globalvar a
 globalvar i
 

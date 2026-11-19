@@ -8,7 +8,6 @@
 
 use super::*;
 
-/// A Workshop node that carries provenance.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ProvenanceNode {
     Rule(usize),
@@ -61,7 +60,6 @@ impl ProvenanceNode {
     }
 }
 
-/// A provenance assignment with invocation-site spans.
 pub(super) struct SiteEdit {
     node: ProvenanceNode,
     span: WorkshopSpan,
