@@ -17,7 +17,6 @@ fn rule(actions: &str) -> String {
     )
 }
 
-/// The program parsed from en-US text and re-emitted in `language`.
 fn program_in(text: &str, language: &str) -> workshop_rs::Program {
     let catalog = Catalog::builtin().expect("catalog loads");
     let program = workshop_rs::parser::parse(text, &catalog, &Locale::new("en-US")).unwrap();

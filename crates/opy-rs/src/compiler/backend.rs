@@ -87,7 +87,6 @@ pub(crate) fn expand_macros(program: &hir::Program) -> Result<hir::Program, Inte
     Ok(expanded)
 }
 
-/// Attribute a macro-expanded span to its invocation site, if any.
 fn attribute(span: &mut Option<HirSpan>, site: Option<HirSpan>) {
     if let Some(site) = site {
         HirSpan::attribute(span, site);

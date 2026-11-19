@@ -182,7 +182,6 @@ mod tests {
         format!("file:///project/{path}")
     }
 
-    /// The `Value` round trip this module replaces, kept as the test oracle.
     fn value_round_trip(json: &str) -> String {
         let mut content: Value = serde_json::from_str(json).expect("json");
         for file in content["files"].as_array_mut().expect("files") {

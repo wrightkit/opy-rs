@@ -239,8 +239,6 @@ impl Preprocessor {
         Ok(())
     }
 
-    /// `std::fs::canonicalize`, memoized for this preprocessing run; the
-    /// source tree does not change while a compile reads it.
     pub(super) fn canonicalize(&self, path: &Path) -> Option<PathBuf> {
         if let Some(canonical) = self.canonical_paths.borrow().get(path) {
             return canonical.clone();
@@ -252,9 +250,6 @@ impl Preprocessor {
         canonical
     }
 
-    /// Record a filesystem path the pipeline probed or read — `candidate` in
-    /// the form it was accessed plus its resolved form when the probe
-    /// canonicalized it.
     pub(super) fn record_access(&mut self, candidate: &Path, canonical: Option<&Path>) {
         self.accessed.insert(candidate.to_path_buf());
         if let Some(canonical) = canonical {

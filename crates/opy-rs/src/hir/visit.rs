@@ -263,8 +263,6 @@ pub(crate) fn walk_stmt<V: Visitor + ?Sized>(visitor: &mut V, statement: &Stmt) 
     }
 }
 
-/// Equality on definition-site spans: macro attribution (see
-/// [`Span::site`]) never changes the result.
 pub(crate) fn same_definition(left: &Expr, right: &Expr) -> bool {
     let all = |left: &[Expr], right: &[Expr]| {
         left.len() == right.len()

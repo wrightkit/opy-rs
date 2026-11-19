@@ -1,4 +1,3 @@
-// The QuickJS-NG FFI boundary is the workspace's only allowed `unsafe` site.
 #[allow(unsafe_code)]
 pub(crate) mod quickjs_ng;
 
@@ -12,12 +11,7 @@ pub(crate) enum Completion {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum EngineError {
-    /// The script threw; `message` is the exception message and `stack` the
-    /// raw engine stack trace (may be empty, e.g. for the interrupt abort).
-    Exception {
-        message: String,
-        stack: String,
-    },
+    Exception { message: String, stack: String },
     Internal(String),
 }
 

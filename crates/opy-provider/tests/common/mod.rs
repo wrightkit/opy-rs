@@ -1,4 +1,3 @@
-//! Shared LPP session harness for provider integration tests.
 #![allow(dead_code)]
 
 use std::io::{BufRead, BufReader, Write};
@@ -18,7 +17,6 @@ impl Session {
         Self::spawn_traced(None)
     }
 
-    /// Spawns with `WRIGHT_PROVIDER_TRACE_FILE` set to `trace`, or removed.
     pub(crate) fn spawn_traced(trace: Option<&Path>) -> Self {
         let mut command = Command::new(env!("CARGO_BIN_EXE_opy-provider"));
         command.env_remove("WRIGHT_PROVIDER_TRACE_FILE");

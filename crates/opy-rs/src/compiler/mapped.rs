@@ -1,5 +1,3 @@
-//! Compilation paired with the source map of its authored origin.
-
 use super::*;
 
 impl Compiler {

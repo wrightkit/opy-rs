@@ -1,4 +1,3 @@
-/// Protocol versions this provider speaks, oldest first.
 pub(crate) const PROTOCOL_VERSIONS: [&str; 8] =
     ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"];
 

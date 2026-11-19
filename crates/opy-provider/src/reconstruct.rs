@@ -1,5 +1,3 @@
-//! `lpp/reconstruct`: OPY source from a canonical Workshop artifact.
-
 use serde::Deserialize;
 use serde_json::{Value, json};
 use workshop_rs::catalog::Catalog;

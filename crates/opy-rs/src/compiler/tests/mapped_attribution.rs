@@ -2,10 +2,6 @@ use std::path::Path;
 
 use crate::Compiler;
 
-/// Macro shapes whose expansion reaches lowering decisions: a body that
-/// crosses an optimization directive, span-less nodes inside a body and in
-/// substituted arguments, a macro call as an argument, and self-referencing
-/// assignments that may lower to a modify action.
 const SOURCE: &str = "playervar foo
 globalvar a
 globalvar g
@@ -40,9 +36,6 @@ rule \"r\":
     eventPlayer.foo = outer(eventPlayer.foo)
 ";
 
-/// Arguments of a macro call written in a `#!define` body carry the define
-/// invocation span, which is also the call's site. Rule "before" is
-/// optimized and rule "after" is not.
 const DEFINE_SOURCE: &str = "globalvar g
 
 macro setv(v):
@@ -67,7 +60,6 @@ rule \"after\":
     CALLPICK
 ";
 
-/// Indexed self-assignment where the array and the index come from macros.
 const INDEX_SOURCE: &str = "globalvar a
 globalvar i
 
@@ -93,7 +85,6 @@ fn mapped_artifact_equals_the_plain_compile() {
         let hir = hir(source);
         let plain = compiler.compile_hir(&hir).unwrap();
         let (artifact, mapped) = compiler.compile_hir_mapped(&hir).unwrap();
-        // `Program` has no `PartialEq`; its debug form covers nodes and provenance.
         assert_eq!(
             format!("{:?}", artifact.wir),
             format!("{:?}", plain.wir),
@@ -108,7 +99,6 @@ fn mapped_artifact_equals_the_plain_compile() {
 fn map_attributes_macro_code_to_the_invocation_site() {
     let compiler = Compiler::new().unwrap();
     let (artifact, mapped) = compiler.compile_hir_mapped(&hir(SOURCE)).unwrap();
-    // `g = 1` inside `pick()`: defined on line 7, invoked on line 27.
     let definition = artifact.wir.action_span(0, 1).expect("definition span");
     assert_eq!(definition.start.line, 7);
     let mut program = workshop_rs::parser::parse(
