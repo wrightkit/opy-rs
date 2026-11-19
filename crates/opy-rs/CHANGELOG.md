@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.9](https://github.com/wrightkit/opy-rs/compare/v0.4.8...v0.4.9) - 2026-11-19
+
+### Other
+
+- remove redundant comments ([#764](https://github.com/wrightkit/opy-rs/pull/764))
+
 ## [0.4.8](https://github.com/wrightkit/opy-rs/compare/v0.4.7...v0.4.8) - 2026-11-18
 
 ### Fixed
