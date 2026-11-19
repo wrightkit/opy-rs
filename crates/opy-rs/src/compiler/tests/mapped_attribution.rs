@@ -93,7 +93,6 @@ fn mapped_artifact_equals_the_plain_compile() {
         let hir = hir(source);
         let plain = compiler.compile_hir(&hir).unwrap();
         let (artifact, mapped) = compiler.compile_hir_mapped(&hir).unwrap();
-        // `Program` has no `PartialEq`; its debug form covers nodes and provenance.
         assert_eq!(
             format!("{:?}", artifact.wir),
             format!("{:?}", plain.wir),
@@ -108,7 +107,6 @@ fn mapped_artifact_equals_the_plain_compile() {
 fn map_attributes_macro_code_to_the_invocation_site() {
     let compiler = Compiler::new().unwrap();
     let (artifact, mapped) = compiler.compile_hir_mapped(&hir(SOURCE)).unwrap();
-    // `g = 1` inside `pick()`: defined on line 7, invoked on line 27.
     let definition = artifact.wir.action_span(0, 1).expect("definition span");
     assert_eq!(definition.start.line, 7);
     let mut program = workshop_rs::parser::parse(

@@ -42,8 +42,6 @@ fn resolve(path: &Path, declared: &mut BTreeSet<PathBuf>, links: &mut LinkCache)
     resolve_inner(path, declared, &mut hops, links)
 }
 
-/// `read_link` results for one compile; a directory prefix is shared by every
-/// path under it, so each link is read once.
 #[derive(Default)]
 struct LinkCache(HashMap<PathBuf, Option<PathBuf>>);
 

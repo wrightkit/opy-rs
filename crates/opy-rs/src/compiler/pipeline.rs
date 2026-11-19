@@ -1,6 +1,3 @@
-//! One compile of OPY HIR: macro expansion, lowering to Workshop WIR,
-//! canonical validation, and emission.
-
 use super::*;
 
 impl Compiler {

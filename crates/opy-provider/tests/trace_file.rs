@@ -22,7 +22,6 @@ fn compile_request(id: i64, format: &str) -> Value {
     })
 }
 
-/// The compile responses for text-v1 and mapped-text-v1 in one session.
 fn compile_both(trace: Option<&Path>) -> Vec<Value> {
     let mut session = Session::spawn_traced(trace);
     session.initialize_version("1.7");
@@ -51,8 +50,6 @@ fn names(line: &Value) -> Vec<&str> {
         .collect()
 }
 
-/// Every span has the next id, a known earlier parent, and an interval
-/// inside its parent's interval.
 fn assert_nested(line: &Value) {
     let spans = line["spans"].as_array().expect("spans");
     for (index, span) in spans.iter().enumerate() {

@@ -1,7 +1,6 @@
 use crate::cst;
 use crate::hir::{self, SettingsNode as HirSettingsNode};
 
-/// Lowers the settings block from the CST to HIR without evaluation.
 pub(crate) fn lower_settings(settings: &cst::Settings) -> hir::Settings {
     hir::Settings {
         span: Some(settings.span.into()),

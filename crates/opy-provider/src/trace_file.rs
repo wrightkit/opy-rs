@@ -26,17 +26,12 @@ const METHODS: [&str; 12] = [
     "lpp/resolveIds",
 ];
 
-/// The trace file, read once per process: the client sets the variable when
-/// it spawns the provider, and the provider's environment does not change
-/// afterwards. A relative path disables tracing.
 pub(crate) fn path_from_env() -> Option<PathBuf> {
     std::env::var_os(ENV)
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
 }
 
-/// The span that covers the handler of `method`: `compile` for `lpp/compile`.
-/// A method the provider does not serve gets no handler span.
 pub(crate) fn handler_span(method: &str) -> Option<opy_rs::trace::Span> {
     METHODS
         .iter()
@@ -45,8 +40,6 @@ pub(crate) fn handler_span(method: &str) -> Option<opy_rs::trace::Span> {
         .map(opy_rs::trace::span)
 }
 
-/// Ends this request's recording and appends its line to `path`. A write
-/// failure is ignored: tracing never fails a request.
 pub(crate) fn append(path: &Path) {
     let Some(spans) = opy_rs::trace::finish() else {
         return;

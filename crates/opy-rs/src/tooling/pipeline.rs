@@ -1,5 +1,3 @@
-//! The shared source pipeline behind `check` and the compile frontend.
-
 use super::*;
 
 pub(super) enum CheckStage {

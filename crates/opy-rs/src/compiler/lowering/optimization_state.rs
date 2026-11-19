@@ -1,5 +1,3 @@
-//! The optimization state that applies to a lowered node.
-
 use super::*;
 
 pub(super) struct OptimizationIndex {

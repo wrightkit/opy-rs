@@ -1,5 +1,3 @@
-//! Source spans of HIR nodes.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,7 +35,6 @@ pub struct Position {
 }
 
 impl Span {
-    /// The span of a node that has no definition span, attributed to `site`.
     pub(crate) fn synthetic(site: Site) -> Span {
         Span {
             file: site.file,
@@ -50,19 +47,15 @@ impl Span {
         }
     }
 
-    /// Whether the node has no definition span.
     pub(crate) fn is_synthetic(&self) -> bool {
         self.site.is_some_and(|site| site.synthetic)
     }
 
-    /// The definition-site view of `span`: what the span is without macro
-    /// attribution.
     pub(crate) fn definition(span: Option<Span>) -> Option<Span> {
         span.filter(|span| !span.is_synthetic())
             .map(|span| Span { site: None, ..span })
     }
 
-    /// The attributed view: the site when one is recorded, else the range.
     pub(crate) fn attributed(self) -> Span {
         let Site {
             file, start, end, ..
@@ -75,9 +68,6 @@ impl Span {
         }
     }
 
-    /// Attribute `span` to the invocation span `site`, keeping its definition
-    /// range. A span-less or synthetic span becomes the synthetic span of
-    /// `site`.
     pub(crate) fn attribute(span: &mut Option<Span>, site: Span) {
         let site = site.range();
         match span {
