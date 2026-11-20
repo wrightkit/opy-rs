@@ -68,6 +68,23 @@ fn descriptions_equal_the_catalog_text_in_lpp_1_8() {
 }
 
 #[test]
+fn a_member_call_parameter_gets_the_description_of_its_catalog_position() {
+    let catalog = Catalog::builtin_ref().expect("catalog");
+    let mut session = Session::spawn();
+    session.initialize_version("1.8");
+    let entries = lookup(&mut session, json!({ "query": "setHealth" }));
+    let entry = entry_for(&entries, "setHealth");
+    // The receiver takes catalog position 0, so `amount` is position 1.
+    let expected = catalog
+        .param_description(Kind::Action, "setHealth", 1, &Locale::new("en-US"))
+        .expect("catalog parameter description");
+    let parameters = entry["callable"]["parameters"].as_array().unwrap();
+    assert_eq!(parameters.len(), 1);
+    assert_eq!(parameters[0]["description"], expected.text);
+    session.shutdown();
+}
+
+#[test]
 fn an_alias_query_reaches_the_canonical_entry_and_both_carry_the_alias() {
     let mut session = Session::spawn();
     session.initialize_version("1.8");

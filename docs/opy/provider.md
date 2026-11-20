@@ -57,8 +57,9 @@ A selector naming no known scope is refused with `lookup.unknownWithin`.
 
 In an LPP 1.8 session, entries also carry the optional `description` and
 `aliases` fields. `description` is the `workshop-rs` catalog text for a
-callable and for each of its parameters (`en-US`, like display names); the
-catalog supplies it for catalog-backed callables only. `aliases` lists the other
+callable, for each of its parameters, and on a parameter entry of a
+`within` callable scope (`en-US`, like display names); the catalog supplies it
+for catalog-backed callables only. `aliases` lists the other
 spellings the reference accepts for a function (the manifest's declared
 aliases) or an enum member (spelled `Domain.MEMBER` like the entry) and is
 omitted when there are none. Both fields are static facts of the entry: the
