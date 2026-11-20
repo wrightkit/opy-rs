@@ -261,7 +261,7 @@ and never introduces an OPY-local settings model.
 | `SetPlayerVariable` on `EventPlayer` | `eventPlayer.<v> = <value>` | supported |
 | `Set/ModifyPlayerVariable` on an arbitrary player expression | `(<player>).<v> = <value>` / `<player>.<v> <op>= <value>` (player-variable member access accepts any receiver) | supported |
 | Non-indexed `Set` with a self-referential binary (`x = x <op> v`) | Emit as written (the resulting `Modify` is equivalent) | supported |
-| Indexed `Set` that re-lowers to indexed `Modify` | The canonical comparator distinguishes indexed `Set` from indexed `Modify` | refusal (`unsupported-value-call`) |
+| Indexed `Set` that re-lowers to indexed `Modify`, or whose self-read matches and strict optimization changes the target or value | Recompilation can change the action or its values | refusal (`unsupported-value-call`) |
 | `Modify` Add/Subtract/Multiply/Divide/Modulo/RaiseToPower | `<v> <op>= <value>` or `<v> = <v> <op> <value>` | supported |
 | `Modify` AppendToArray | `<v>.append(<value>)` | supported |
 | `Modify` RemoveFromArrayByValue / RemoveFromArrayByIndex / Min / Max | `<v>.remove(<value>)` / `del <v>[<i>]` / `min=` / `max=` | supported |
@@ -346,7 +346,7 @@ environment checks.
 | `unsupported-enum-domain` | Enum domain not source-exposed | refusal |
 | `unsupported-enum-member` | Member outside the domain or without an OPY spelling | refusal |
 | `unsupported-enum-domain-mismatch` | Argument enum domain ≠ declared parameter domain | refusal |
-| `unsupported-value-call` | Value call with no OPY form, dedicated-lowering name, `for`-iterable-only name in value position, an indexed `Set` that re-lowers to `Modify`, `valueInArray` at literal index 0 (re-lowers to `firstOf`), a non-identifier `memberAccess` member, or a lambda binder outside a callback | refusal; the other syntax-produced ids are implemented |
+| `unsupported-value-call` | Value call with no OPY form, dedicated-lowering name, `for`-iterable-only name in value position, an indexed `Set` re-lowered to `Modify` or with a matching self-read and an optimization-changed target or value, `valueInArray` at literal index 0 (re-lowers to `firstOf`), a non-identifier `memberAccess` member, or a lambda binder outside a callback | refusal; the other syntax-produced ids are implemented |
 
 ### Frontend re-normalization traps
 

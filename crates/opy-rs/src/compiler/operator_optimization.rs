@@ -1,18 +1,16 @@
-use workshop_rs::catalog::Kind;
+use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::{Action, ModifyOp, Value};
 
 use super::Compiler;
 use super::string_format;
 use crate::compile_time::round_half_up;
 
-pub(crate) const NUMBER_LIMIT: f64 = 1e7;
+mod indexed_target;
+mod structural;
+pub(super) use indexed_target::reads_indexed_target;
+pub(super) use structural::{same, same_shape};
 
-const RANDOM_CALLS: [&str; 4] = [
-    "randomInteger",
-    "randomReal",
-    "randomValueInArray",
-    "randomizedArray",
-];
+pub(crate) const NUMBER_LIMIT: f64 = 1e7;
 
 const NAMED_VECTORS: [(&str, [f64; 3]); 6] = [
     ("LEFT", [1.0, 0.0, 0.0]),
@@ -24,13 +22,17 @@ const NAMED_VECTORS: [(&str, [f64; 3]); 6] = [
 ];
 
 pub(super) struct OperatorOptimizer<'a> {
-    compiler: &'a Compiler,
+    catalog: &'a Catalog,
     strict: bool,
 }
 
 impl<'a> OperatorOptimizer<'a> {
     pub(super) fn new(compiler: &'a Compiler, strict: bool) -> Self {
-        Self { compiler, strict }
+        Self::with_catalog(compiler.catalog, strict)
+    }
+
+    pub(super) fn with_catalog(catalog: &'a Catalog, strict: bool) -> Self {
+        Self { catalog, strict }
     }
 
     pub(super) fn constant_truth(&self, value: &Value) -> Option<bool> {
@@ -888,7 +890,6 @@ impl<'a> OperatorOptimizer<'a> {
                     name.as_str(),
                     "==" | "!=" | "<" | "<=" | ">" | ">=" | "and" | "or" | "not"
                 ) || self
-                    .compiler
                     .catalog
                     .entry(Kind::Value, name)
                     .and_then(|entry| entry.return_type())
@@ -902,7 +903,6 @@ impl<'a> OperatorOptimizer<'a> {
         match value {
             Value::Number(_) => true,
             Value::Call { name, .. } => self
-                .compiler
                 .catalog
                 .entry(Kind::Value, name)
                 .and_then(|entry| entry.return_type())
@@ -1193,60 +1193,6 @@ fn negates(value: &Value, other: &Value) -> bool {
     negated(value).is_some_and(|inner| same(inner, other))
 }
 
-pub(super) fn same(left: &Value, right: &Value) -> bool {
-    match (left, right) {
-        (Value::Number(a), Value::Number(b)) => a == b,
-        (Value::String(a), Value::String(b))
-        | (Value::LocalizedString(a), Value::LocalizedString(b))
-        | (Value::GlobalVariable(a), Value::GlobalVariable(b))
-        | (Value::Subroutine(a), Value::Subroutine(b)) => a == b,
-        (Value::Bool(a), Value::Bool(b)) => a == b,
-        (Value::Null, Value::Null) | (Value::EventPlayer, Value::EventPlayer) => true,
-        (Value::Array(a), Value::Array(b)) => {
-            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same(a, b))
-        }
-        (
-            Value::Vector {
-                x: ax,
-                y: ay,
-                z: az,
-            },
-            Value::Vector {
-                x: bx,
-                y: by,
-                z: bz,
-            },
-        ) => same(ax, bx) && same(ay, by) && same(az, bz),
-        (
-            Value::Enum {
-                value_type: at,
-                value: av,
-            },
-            Value::Enum {
-                value_type: bt,
-                value: bv,
-            },
-        ) => at == bt && av == bv,
-        (
-            Value::PlayerVariable {
-                player: ap,
-                variable: av,
-            },
-            Value::PlayerVariable {
-                player: bp,
-                variable: bv,
-            },
-        ) => av == bv && same(ap, bp),
-        (Value::Call { name: an, args: aa }, Value::Call { name: bn, args: ba }) => {
-            an == bn
-                && !RANDOM_CALLS.contains(&an.as_str())
-                && aa.len() == ba.len()
-                && aa.iter().zip(ba).all(|(a, b)| same(a, b))
-        }
-        _ => false,
-    }
-}
-
 fn mentions_element(value: &Value) -> bool {
     match value {
         Value::Call { name, args } => {
@@ -1344,14 +1290,8 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
                 return None;
             };
             let (variable, index) = (&args[0], &args[1]);
-            let (_, value) = self_operand(operation, operands, |read| match read {
-                Value::Call { name, args } if name == "valueInArray" && args.len() == 2 => {
-                    same(&args[0], variable) && same(&args[1], index)
-                }
-                Value::Call { name, args } if name == "firstOf" && args.len() == 1 => {
-                    same(&args[0], variable) && is_number(index, 0.0)
-                }
-                _ => false,
+            let (_, value) = self_operand(operation, operands, |read| {
+                reads_indexed_target(read, variable, index)
             })?;
             Some(Action::Call {
                 name: name.replace("set", "modify"),
