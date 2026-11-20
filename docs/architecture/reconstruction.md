@@ -114,7 +114,7 @@ observable behavior. A difference outside this list is a defect.
 | Variable and subroutine names | Identity is the declaration index; every reference rebinds through the declared index. Consistent renames (e.g. identifier mangling) are unobservable. |
 | Declaration table order | Only the name → index binding matters; table position carries no execution effect. |
 | Relative order of subroutine-event rules | Subroutine-event rules run only when called, never by program position. |
-| `Set x = x <op> v` ↔ `Modify x <op> v` | The frontend normalizes the self-referential Set to the Modify; both spellings produce the same canonical action. |
+| Non-indexed `Set x = x <op> v` ↔ `Modify x <op> v` | The comparator treats these forms as equivalent. |
 | `eachPlayer` event ↔ `eachPlayer` + `All`/`All` filters | The unfiltered event and the all-filters form select the same players (existing `equivalent` behavior, retained). |
 | Disabled rules, conditions, and actions | Disabled constructs never execute. They are reconstructed for fidelity (see the mapping table) but carry no observable weight. |
 | Rules with no actions | A rule with no actions performs no effect regardless of its conditions. |
@@ -260,7 +260,8 @@ and never introduces an OPY-local settings model.
 | `SetGlobalVariable` | `<g> = <value>` | supported |
 | `SetPlayerVariable` on `EventPlayer` | `eventPlayer.<v> = <value>` | supported |
 | `Set/ModifyPlayerVariable` on an arbitrary player expression | `(<player>).<v> = <value>` / `<player>.<v> <op>= <value>` (player-variable member access accepts any receiver) | supported |
-| `Set` whose value is a self-referential binary (`x = x <op> v`) | Emit as written; recompiles to `Modify` (allowed difference) | supported |
+| Non-indexed `Set` with a self-referential binary (`x = x <op> v`) | Emit as written (the resulting `Modify` is equivalent) | supported |
+| Indexed `Set` that re-lowers to indexed `Modify`, or whose self-read matches and strict optimization changes the target or value | Recompilation can change the action or its values | refusal (`unsupported-value-call`) |
 | `Modify` Add/Subtract/Multiply/Divide/Modulo/RaiseToPower | `<v> <op>= <value>` or `<v> = <v> <op> <value>` | supported |
 | `Modify` AppendToArray | `<v>.append(<value>)` | supported |
 | `Modify` RemoveFromArrayByValue / RemoveFromArrayByIndex / Min / Max | `<v>.remove(<value>)` / `del <v>[<i>]` / `min=` / `max=` | supported |
@@ -345,7 +346,7 @@ environment checks.
 | `unsupported-enum-domain` | Enum domain not source-exposed | refusal |
 | `unsupported-enum-member` | Member outside the domain or without an OPY spelling | refusal |
 | `unsupported-enum-domain-mismatch` | Argument enum domain ≠ declared parameter domain | refusal |
-| `unsupported-value-call` | Value call with no OPY form, dedicated-lowering name, `for`-iterable-only name in value position, `valueInArray` at literal index 0 (re-lowers to `firstOf`), a non-identifier `memberAccess` member, or a lambda binder outside a callback | refusal; the other syntax-produced ids are implemented |
+| `unsupported-value-call` | Value call with no OPY form, dedicated-lowering name, `for`-iterable-only name in value position, an indexed `Set` re-lowered to `Modify` or with a matching self-read and an optimization-changed target or value, `valueInArray` at literal index 0 (re-lowers to `firstOf`), a non-identifier `memberAccess` member, or a lambda binder outside a callback | refusal; the other syntax-produced ids are implemented |
 
 ### Frontend re-normalization traps
 
