@@ -24,7 +24,7 @@ pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), Inte
     Ok(())
 }
 
-pub(crate) type MacroBindings<'a> = HashMap<&'a str, Expr>;
+type MacroBindings<'a> = HashMap<&'a str, Expr>;
 
 pub(crate) struct MacroExpander<'a> {
     macros: HashMap<&'a str, (&'a [String], &'a [Stmt])>,
@@ -193,7 +193,14 @@ impl<'a> MacroExpander<'a> {
         Ok(())
     }
 
-    pub(crate) fn expand_expr(
+    pub(crate) fn expand_root_expr(
+        &mut self,
+        expression: &mut Expr,
+    ) -> Result<(), IntegrationError> {
+        self.expand_expr_in_place(expression, &MacroBindings::new(), None)
+    }
+
+    fn expand_expr(
         &mut self,
         expression: &Expr,
         bindings: &MacroBindings<'_>,

@@ -1,6 +1,29 @@
 use super::*;
 
 impl Lowering<'_> {
+    pub(super) fn split_rule_condition<'expr>(
+        expr: &'expr Expr,
+        conditions: &mut Vec<&'expr Expr>,
+    ) {
+        match expr {
+            Expr::Binary {
+                op, left, right, ..
+            } if op == "and" => {
+                Self::split_rule_condition(left, conditions);
+                Self::split_rule_condition(right, conditions);
+            }
+            Expr::Binary {
+                op, left, right, ..
+            } if op == "=="
+                && matches!(right.as_ref(), Expr::Bool { value: true, .. })
+                && matches!(left.as_ref(), Expr::Binary { op, .. } if op == "and") =>
+            {
+                Self::split_rule_condition(left, conditions);
+            }
+            _ => conditions.push(expr),
+        }
+    }
+
     /// Optimizes each rule condition. The pinned reference drops a condition
     /// that folds to true and drops the whole rule when one folds to false, so
     /// `None` means the rule is not emitted. A `@Delimiter` rule survives and

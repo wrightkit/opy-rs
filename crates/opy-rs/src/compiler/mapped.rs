@@ -21,10 +21,11 @@ impl Compiler {
         hir: &hir::Program,
         locale: &Locale,
     ) -> Result<(CompilationArtifact, MappedText), IntegrationError> {
-        self.compile_hir_mapped_with_hook(hir, None, locale)
+        self.compile_hir_mapped_with_locale_and_hook(hir, None, locale)
     }
 
-    pub(super) fn compile_hir_mapped_with_hook(
+    /// Compile with a post-compile hook and return the mapped Workshop text.
+    pub fn compile_hir_mapped_with_locale_and_hook(
         &self,
         hir: &hir::Program,
         hook: Option<crate::PostCompileHookRecord>,

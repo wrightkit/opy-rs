@@ -473,21 +473,6 @@ impl<'a> Lowering<'a> {
         self.action_argument_origins[action] = spans.into_iter().collect();
     }
 
-    fn action_provenance(
-        &self,
-        actions: &[ActionId],
-    ) -> Vec<(Option<HirSpan>, Vec<Option<HirSpan>>)> {
-        self.useful_actions(actions)
-            .iter()
-            .map(|action| {
-                (
-                    self.action_origins[*action],
-                    self.action_argument_origins[*action].clone(),
-                )
-            })
-            .collect()
-    }
-
     fn push_call_action_with_spans<I>(
         &mut self,
         name: impl Into<String>,
@@ -720,8 +705,8 @@ impl<'a> Lowering<'a> {
             .collect()
     }
 
-    fn public_actions(&self, actions: &[ActionId]) -> Vec<workshop_rs::Action> {
-        self.useful_actions(actions)
+    fn materialize_selected_actions(&self, actions: &[ActionId]) -> Vec<workshop_rs::Action> {
+        actions
             .iter()
             .map(|id| {
                 let mut action = self.materialize_action(&self.actions[*id]);

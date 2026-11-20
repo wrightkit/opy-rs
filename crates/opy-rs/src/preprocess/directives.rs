@@ -1,13 +1,37 @@
 use super::*;
 
-impl Preprocessor {
-    pub(super) fn process_directives(
+impl Preprocessor<'_> {
+    pub(super) fn process_source(
         &mut self,
-        tokens: &mut Vec<Token>,
+        text: &str,
+        file_id: u32,
+        allow_leading_main_file: bool,
+    ) -> OpyResult<(Vec<Token>, bool)> {
+        let settings = crate::settings::find_blocks(text, file_id)?
+            .pop()
+            .map(|block| self.resolve_settings_source(block))
+            .transpose()?;
+        if let Some(block) = settings.as_ref() {
+            self.require_settings_slot(block)?;
+        }
+        let sanitized = settings
+            .as_ref()
+            .map(|block| crate::settings::sanitize_for_lex(text, block));
+        let tokens = lex(LexInput {
+            file_id,
+            text: sanitized.as_deref().unwrap_or(text),
+        })?;
+        let owns_settings = settings.is_some();
+        let tokens = self.process_directives(&tokens, allow_leading_main_file, settings)?;
+        Ok((tokens, owns_settings))
+    }
+
+    fn process_directives(
+        &mut self,
+        input: &[Token],
         allow_leading_main_file: bool,
         mut pending_settings: Option<SettingsBlock>,
-    ) -> OpyResult<()> {
-        let input = std::mem::take(tokens);
+    ) -> OpyResult<Vec<Token>> {
         let mut out: Vec<Token> = Vec::with_capacity(input.len());
         let mut index = 0;
         while index < input.len() {
@@ -22,8 +46,7 @@ impl Preprocessor {
             }
             let token = &input[index];
             if token.kind == TokenKind::Directive {
-                let is_leading_main_file = allow_leading_main_file;
-                self.handle_directive(token.clone(), &mut out, is_leading_main_file)?;
+                self.handle_directive(token, &mut out, allow_leading_main_file)?;
                 index += 1;
             } else if token.kind == TokenKind::Ident
                 && matches!(token.text.as_str(), "rule" | "def")
@@ -45,17 +68,16 @@ impl Preprocessor {
                 out.push(token.clone());
                 index += 1;
             } else {
-                index = self.expand_one(&input, index, &mut out)?;
+                index = self.expand_one(input, index, &mut out)?;
             }
         }
         if let Some(block) = pending_settings.take() {
             self.activate_settings_block(block)?;
         }
-        *tokens = out;
-        Ok(())
+        Ok(out)
     }
 
-    fn activate_settings_block(&mut self, block: SettingsBlock) -> OpyResult<()> {
+    fn require_settings_slot(&self, block: &SettingsBlock) -> OpyResult<()> {
         if self.settings.is_some() {
             return Err(OpyError::at(
                 "settings-placement",
@@ -63,13 +85,18 @@ impl Preprocessor {
                 block.keyword_span,
             ));
         }
+        Ok(())
+    }
+
+    fn activate_settings_block(&mut self, block: SettingsBlock) -> OpyResult<()> {
+        self.require_settings_slot(&block)?;
         self.settings = Some(self.expand_settings(block)?);
         Ok(())
     }
 
     fn handle_directive(
         &mut self,
-        token: Token,
+        token: &Token,
         out: &mut Vec<Token>,
         allow_leading_main_file: bool,
     ) -> OpyResult<()> {

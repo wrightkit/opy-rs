@@ -46,7 +46,7 @@ pub(super) fn display_path(
     }
 }
 
-impl Preprocessor {
+impl Preprocessor<'_> {
     pub(super) fn include(
         &mut self,
         include: &str,
@@ -114,19 +114,6 @@ impl Preprocessor {
             requested,
         );
         let lexical_path = display_path(candidate, None, &self.display_root, requested);
-        let overlay_text = self
-            .overlay
-            .get(requested)
-            .or_else(|| self.overlay.get(&candidate_path))
-            .or_else(|| self.overlay.get(&lexical_path))
-            .or_else(|| self.overlay.get(&canonical_path))
-            .or_else(|| {
-                canonical
-                    .as_ref()
-                    .and_then(|path| self.overlay.get(path.to_string_lossy().as_ref()))
-            })
-            .cloned();
-        let uses_overlay = overlay_text.is_some();
         let identity = canonical.clone().unwrap_or_else(|| candidate.to_path_buf());
         if self.include_stack.contains(&identity) {
             return Err(OpyError::at(
@@ -152,8 +139,20 @@ impl Preprocessor {
         }
         self.imported_files.insert(import_identity);
 
+        let overlay_text = self
+            .overlay
+            .get(requested)
+            .or_else(|| self.overlay.get(&candidate_path))
+            .or_else(|| self.overlay.get(&lexical_path))
+            .or_else(|| self.overlay.get(&canonical_path))
+            .or_else(|| {
+                canonical
+                    .as_ref()
+                    .and_then(|path| self.overlay.get(path.to_string_lossy().as_ref()))
+            });
+        let uses_overlay = overlay_text.is_some();
         let text = match overlay_text {
-            Some(text) => text,
+            Some(text) => text.clone(),
             None => {
                 let canonical = canonical.ok_or_else(|| {
                     OpyError::at(
@@ -192,46 +191,22 @@ impl Preprocessor {
         // controls remain active for following sources as in OverPy. Rule
         // prefixes retain their file-scoped restoration below.
         let saved_prefix = self.preprocessing.rule_prefix.clone();
-        let mut leaves_macro_file_context = false;
         let result = (|| {
-            let settings = match crate::settings::find_blocks(&text, file_id) {
-                Err(error) => return Err(error),
-                Ok(mut blocks) => blocks.pop(),
-            };
-            let settings = match settings {
-                Some(block) => Some(self.resolve_settings_source(block)?),
-                None => None,
-            };
-            let owns_settings = settings.is_some();
-            if let Some(block) = settings.as_ref()
-                && self.settings.is_some()
-            {
-                return Err(OpyError::at(
-                    "settings-placement",
-                    "only one settings block is supported in a project".to_string(),
-                    block.keyword_span,
-                ));
-            }
-            let sanitized = settings
-                .as_ref()
-                .map(|block| crate::settings::sanitize_for_lex(&text, block));
-            let mut included = lex(LexInput {
-                file_id,
-                text: sanitized.as_deref().unwrap_or(&text),
-            })?;
             let allow_leading_main_file = text
                 .lines()
                 .map(str::trim)
                 .find(|line| !line.is_empty())
                 .is_some_and(|line| line.starts_with("#!mainFile"));
-            self.process_directives(&mut included, allow_leading_main_file, settings)?;
-            leaves_macro_file_context = owns_settings && self.contains_macro_use(&text, file_id);
+            let (mut included, owns_settings) =
+                self.process_source(&text, file_id, allow_leading_main_file)?;
+            let leaves_macro_file_context =
+                owns_settings && self.contains_macro_use(&text, file_id);
             included.retain(|token| token.kind != TokenKind::Eof);
-            Ok(included)
+            Ok((included, leaves_macro_file_context))
         })();
         self.preprocessing.rule_prefix = saved_prefix;
         self.include_stack.pop();
-        let included = result?;
+        let (included, leaves_macro_file_context) = result?;
         if leaves_macro_file_context {
             self.last_macro_include_path = Some(identity);
         }

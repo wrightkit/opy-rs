@@ -56,6 +56,9 @@ mod declarations;
 mod definitions;
 mod expression_newlines;
 mod expressions;
+mod numbers;
+
+pub(crate) use numbers::number_token_value;
 mod statements;
 
 struct Parser<'a> {
@@ -474,7 +477,7 @@ pub(crate) fn parse_expression_fragment(
         text: &text,
     })?;
     for token in &mut tokens {
-        token.layout = shift_span(token.span, origin);
+        token.layout = token.span.shifted(origin);
         token.span = bounds.map_or(token.layout, |bounds| bounded_span(token.layout, bounds));
     }
     let mut parser = Parser::new(&tokens, false, defines);
@@ -491,14 +494,6 @@ pub(crate) fn parse_expression_fragment(
         parser.error_at_current("unexpected tokens in f-string interpolation".to_string());
     }
     parser.errors.into_iter().next().map_or(Ok(expression), Err)
-}
-
-fn shift_span(span: Span, origin: Position) -> Span {
-    Span::new(
-        span.file,
-        crate::diag::shift_position(span.start, origin),
-        crate::diag::shift_position(span.end, origin),
-    )
 }
 
 pub(crate) fn bounded_span(span: Span, bounds: Span) -> Span {

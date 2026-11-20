@@ -35,30 +35,14 @@ struct EnumMember {
     value: EnumMemberValue,
 }
 
-/// The auto-increment state of a custom enum while its members are
-/// collected. The reference tracks `lastIntValue` the same way: `= n`
-/// reseeds the counter at `n + 1`, `= -n` yields `-n + 1` for the next
-/// bare member, and any other explicit value breaks the numeric chain.
-#[derive(Debug, Clone, Copy)]
-enum EnumCounter {
-    Number(f64),
-    /// `= -<number>` keeps the negated literal so the next bare member
-    /// resolves to `-n + 1`.
-    Negated(f64),
-    /// The previous member had a non-numeric explicit value; the next
-    /// bare member is a hard error.
-    Other,
-}
-
 struct Lowerer {
     global_declarations: HashMap<String, usize>,
     player_declarations: HashMap<String, usize>,
     subroutine_declarations: HashMap<String, usize>,
-    subroutine_definitions: Vec<(String, usize)>,
+    subroutine_definitions: HashMap<String, usize>,
     constant_declarations: HashMap<String, usize>,
     macro_declarations: HashMap<String, usize>,
-    enums: HashMap<String, Vec<EnumMember>>,
-    enum_declarations: HashMap<String, usize>,
+    enums: HashMap<String, EnumDeclaration>,
     locals: Vec<String>,
     current_order: usize,
     allow_dict_literal: bool,
@@ -75,11 +59,10 @@ impl Lowerer {
             global_declarations: HashMap::new(),
             player_declarations: HashMap::new(),
             subroutine_declarations: HashMap::new(),
-            subroutine_definitions: Vec::new(),
+            subroutine_definitions: HashMap::new(),
             constant_declarations: HashMap::new(),
             macro_declarations: HashMap::new(),
             enums: HashMap::new(),
-            enum_declarations: HashMap::new(),
             locals: Vec::new(),
             current_order: 0,
             allow_dict_literal: false,
@@ -93,6 +76,7 @@ impl Lowerer {
 }
 
 mod declarations;
+use declarations::EnumDeclaration;
 mod expressions;
 pub(crate) mod policy;
 pub(crate) mod special_forms;

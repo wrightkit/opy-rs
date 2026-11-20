@@ -315,7 +315,7 @@ impl Diagnostic {
             span: error
                 .diagnostic
                 .span
-                .map(to_frontend_span)
+                .map(Span::from_hir)
                 .and_then(|span| resolve_record_span(span, files)),
         }
     }
@@ -369,14 +369,6 @@ fn resolve_record_span(span: Span, files: &[FileRecord]) -> Option<SourceLocatio
         start: span.start,
         end: span.end,
     })
-}
-
-fn to_frontend_span(span: hir::types::Span) -> Span {
-    Span::new(
-        span.file,
-        Position::new(span.start.line, span.start.col),
-        Position::new(span.end.line, span.end.col),
-    )
 }
 
 /// The resolved program model: the Opy HIR semantic program plus the
@@ -497,7 +489,7 @@ impl SemanticModel {
                 Declaration::Constant { name, span, .. } => (SymbolKind::Constant, name, *span),
                 Declaration::Macro { name, span, .. } => (SymbolKind::Macro, name, *span),
             };
-            let Some(span) = span.map(to_frontend_span) else {
+            let Some(span) = span.map(Span::from_hir) else {
                 // Foreign payloads may omit spans; such declarations are not
                 // addressable and stay out of the index.
                 continue;
@@ -523,7 +515,7 @@ impl SemanticModel {
             else {
                 continue;
             };
-            let Some(span) = name_span.or(*span).map(to_frontend_span) else {
+            let Some(span) = name_span.or(*span).map(Span::from_hir) else {
                 continue;
             };
             let Some(declaration) = resolve_span(span, &self.hir.files) else {
@@ -574,14 +566,14 @@ impl hir::visit::Visitor for ReferenceSiteCollector {
                 span: Some(span),
             } => {
                 self.sites
-                    .push((SymbolKind::Global, name.clone(), to_frontend_span(*span)));
+                    .push((SymbolKind::Global, name.clone(), Span::from_hir(*span)));
             }
             HirExpr::Constant {
                 name,
                 span: Some(span),
             } => {
                 self.sites
-                    .push((SymbolKind::Constant, name.clone(), to_frontend_span(*span)));
+                    .push((SymbolKind::Constant, name.clone(), Span::from_hir(*span)));
             }
             HirExpr::PlayerVar {
                 name,
@@ -591,7 +583,7 @@ impl hir::visit::Visitor for ReferenceSiteCollector {
             } => {
                 if let Some(span) = member_span.as_ref().or(span.as_ref()) {
                     self.sites
-                        .push((SymbolKind::Player, name.clone(), to_frontend_span(*span)));
+                        .push((SymbolKind::Player, name.clone(), Span::from_hir(*span)));
                 }
             }
             HirExpr::Call {
@@ -599,7 +591,7 @@ impl hir::visit::Visitor for ReferenceSiteCollector {
                 span: Some(span),
                 ..
             } => {
-                let span = to_frontend_span(*span);
+                let span = Span::from_hir(*span);
                 self.sites
                     .push((SymbolKind::Subroutine, name.clone(), span));
                 self.sites.push((SymbolKind::Def, name.clone(), span));
@@ -610,7 +602,7 @@ impl hir::visit::Visitor for ReferenceSiteCollector {
                 ..
             } => {
                 self.sites
-                    .push((SymbolKind::Macro, name.clone(), to_frontend_span(*span)));
+                    .push((SymbolKind::Macro, name.clone(), Span::from_hir(*span)));
             }
             _ => {}
         }
@@ -636,7 +628,7 @@ impl hir::visit::Visitor for ReferenceSiteCollector {
             span: Some(span),
         } = statement
         {
-            let span = to_frontend_span(*span);
+            let span = Span::from_hir(*span);
             self.sites
                 .push((SymbolKind::Subroutine, name.clone(), span));
             self.sites.push((SymbolKind::Def, name.clone(), span));

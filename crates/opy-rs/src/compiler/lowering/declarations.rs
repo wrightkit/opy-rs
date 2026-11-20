@@ -497,12 +497,13 @@ impl<'a> Lowering<'a> {
         actions: Vec<ActionId>,
     ) -> Result<(), IntegrationError> {
         self.with_default_optimization(|this| {
+            let actions = this.useful_actions(&actions);
             let rule = rule_from_parts(
                 name.to_string(),
                 false,
                 event,
                 Vec::new(),
-                this.public_actions(&actions),
+                this.materialize_selected_actions(&actions),
             );
             this.append_rule(rule, &actions, None, std::iter::empty())
         })
@@ -641,6 +642,7 @@ impl<'a> Lowering<'a> {
             finish,
         ];
         self.with_default_optimization(|this| {
+            let actions = this.useful_actions(&actions);
             let rule = rule_from_parts(
                 "OverPy translation setup - Determine the player's language".to_string(),
                 false,
@@ -650,7 +652,7 @@ impl<'a> Lowering<'a> {
                     workshop_rs::Condition::new(this.materialize_value(not_dummy)),
                     workshop_rs::Condition::new(this.materialize_value(initial_language)),
                 ],
-                this.public_actions(&actions),
+                this.materialize_selected_actions(&actions),
             );
             this.append_rule(rule, &actions, None, [None, None, None])
         })?;

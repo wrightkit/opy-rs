@@ -1,5 +1,5 @@
 use crate::compile_time::Value;
-use crate::diag::{OpyError, OpyResult};
+use crate::diag::{OpyError, OpyResult, Span};
 use crate::hir;
 use std::collections::HashMap;
 
@@ -26,9 +26,8 @@ pub(super) fn element_from_value(
     span: hir::Span,
     is_map_list: bool,
 ) -> OpyResult<hir::SettingsListElement> {
-    let text = super::value::display_value(&value).map_err(|message| {
-        super::settings_expression_error(super::hir_span_to_diag_span(span), message)
-    })?;
+    let text = super::value::display_value(&value)
+        .map_err(|message| super::settings_expression_error(Span::from_hir(span), message))?;
     let mut element = hir::SettingsListElement {
         value: text,
         evaluated: None,
@@ -93,7 +92,7 @@ fn resolve(element: &mut hir::SettingsListElement, value: Value, span: hir::Span
         OpyError::at(
             "settings-expression",
             message.to_string(),
-            super::hir_span_to_diag_span(span),
+            Span::from_hir(span),
         )
     };
     if entries.len() != 1 {

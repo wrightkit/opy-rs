@@ -132,7 +132,7 @@ pub struct PreprocessOutcome {
 }
 
 impl PreprocessOutcome {
-    fn failure(error: OpyError, pre: Preprocessor) -> Self {
+    fn failure(error: OpyError, pre: Preprocessor<'_>) -> Self {
         Self {
             result: Err(error),
             files: pre.files,
@@ -158,7 +158,7 @@ pub fn preprocess_with_overlay_outcome(
         root: resolved_root.clone(),
         accessed: BTreeSet::from([root.to_path_buf(), resolved_root.clone()]),
         display_root: resolved_root,
-        overlay: overlay.clone(),
+        overlay,
         source_texts: BTreeMap::from([(0, main_text.to_string())]),
         line_offsets: std::cell::RefCell::new(BTreeMap::new()),
         canonical_paths: std::cell::RefCell::new(HashMap::new()),
@@ -268,30 +268,10 @@ pub fn preprocess_with_overlay_outcome(
         pre.record("mainFile", Some(&main_file), span);
     }
     let source_text = owned_main_text.as_deref().unwrap_or(main_text);
-    let settings = match crate::settings::find_blocks(source_text, source_file_id) {
-        Ok(mut blocks) => blocks.pop(),
+    let tokens = match pre.process_source(source_text, source_file_id, false) {
+        Ok((tokens, _)) => tokens,
         Err(error) => return PreprocessOutcome::failure(error, pre),
     };
-    let settings = match settings
-        .map(|block| pre.resolve_settings_source(block))
-        .transpose()
-    {
-        Ok(settings) => settings,
-        Err(error) => return PreprocessOutcome::failure(error, pre),
-    };
-    let sanitized = settings
-        .as_ref()
-        .map(|block| crate::settings::sanitize_for_lex(source_text, block));
-    let mut tokens = match lex(LexInput {
-        file_id: source_file_id,
-        text: sanitized.as_deref().unwrap_or(source_text),
-    }) {
-        Ok(tokens) => tokens,
-        Err(error) => return PreprocessOutcome::failure(error, pre),
-    };
-    if let Err(error) = pre.process_directives(&mut tokens, false, settings) {
-        return PreprocessOutcome::failure(error, pre);
-    }
     if let Err(error) = pre.load_translation_catalog() {
         return PreprocessOutcome::failure(error, pre);
     }
@@ -347,14 +327,6 @@ fn can_merge_without_separator(previous: TokenKind, current: TokenKind) -> bool 
         && matches!(current, TokenKind::Ident | TokenKind::Number)
 }
 
-fn shift_settings_span(span: Span, origin: crate::diag::Position) -> Span {
-    Span::new(
-        span.file,
-        crate::diag::shift_position(span.start, origin),
-        crate::diag::shift_position(span.end, origin),
-    )
-}
-
 fn external_text_span(file: u32, text: &str) -> Span {
     let line = text.matches('\n').count() as u32 + 1;
     let col = text
@@ -368,11 +340,11 @@ fn external_text_span(file: u32, text: &str) -> Span {
     )
 }
 
-struct Preprocessor {
+struct Preprocessor<'a> {
     files: Vec<FileRecord>,
     root: PathBuf,
     display_root: PathBuf,
-    overlay: BTreeMap<String, String>,
+    overlay: &'a BTreeMap<String, String>,
     source_texts: BTreeMap<u32, String>,
     line_offsets: std::cell::RefCell<BTreeMap<u32, macros::LineOffsets>>,
     canonical_paths: std::cell::RefCell<HashMap<PathBuf, Option<PathBuf>>>,
@@ -391,7 +363,7 @@ struct Preprocessor {
     preprocessing: PreprocessingState,
 }
 
-impl Preprocessor {
+impl Preprocessor<'_> {
     fn load_translation_catalog(&mut self) -> OpyResult<()> {
         let Some(translations) = self.preprocessing.translations.as_ref() else {
             return Ok(());
@@ -501,7 +473,7 @@ impl Preprocessor {
         };
         let mut tokens = tokens;
         for token in &mut tokens {
-            token.span = shift_settings_span(token.span, block.text_start);
+            token.span = token.span.shifted(block.text_start);
             token.layout = token.span;
         }
         let tokens = self.expand(tokens)?;
