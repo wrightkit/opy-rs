@@ -10,8 +10,8 @@ The provider serves language id `opy` and the `opy` extension. It supports LPP
 `1.0` for document-supplied requests, LPP `1.1` for file-entry project loading,
 LPP `1.2` for provider-owned directory targets, LPP `1.3` for source identity,
 LPP `1.4` for compile artifact format negotiation, LPP `1.5` for name
-lookup, LPP `1.6` for canonical id resolution, and LPP `1.7` for declared
-compile inputs.
+lookup, LPP `1.6` for canonical id resolution, LPP `1.7` for declared
+compile inputs, and LPP `1.8` for lookup descriptions and aliases.
 
 | Capability | Method | Behavior |
 | --- | --- | --- |
@@ -54,6 +54,16 @@ scope lists its parameters in call order, an enum scope lists member
 spellings — including settings-table domains such as `opy:enum/mapRotation`
 — and a settings scope lists the immediate child keys and path segments.
 A selector naming no known scope is refused with `lookup.unknownWithin`.
+
+In an LPP 1.8 session, entries also carry the optional `description` and
+`aliases` fields. `description` is the `workshop-rs` catalog text for a
+callable and for each of its parameters (`en-US`, like display names); the
+catalog supplies it for catalog-backed callables only. `aliases` lists the other
+spellings the reference accepts for a function (the manifest's declared
+aliases) or an enum member (spelled `Domain.MEMBER` like the entry) and is
+omitted when there are none. Both fields are static facts of the entry: the
+alias query and the canonical query return the same entry. A session before LPP
+1.8 never carries either field.
 
 Results are deterministic and bounded: an absent `limit` applies a bound of
 20 entries. Display names are `en-US`, which is also the deterministic

@@ -7,6 +7,7 @@ use opy_rs::lookup::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::negotiation::{LOOKUP_DESCRIPTIONS_VERSION, version_at_least};
 use crate::{HandlerError, LANGUAGE_ID, Server, invalid_language};
 
 const DEFAULT_LOOKUP_LIMIT: u64 = 20;
@@ -74,6 +75,10 @@ impl Server {
             limit: usize::MAX,
         };
         let scoped = query.within.is_some();
+        let described = self
+            .protocol_version
+            .as_deref()
+            .is_some_and(|version| version_at_least(version, LOOKUP_DESCRIPTIONS_VERSION));
         let mut outcome = opy_lookup(&query);
         if let (LookupOutcome::UnknownWithin { .. }, Some(LookupWithin::Enum(domain))) =
             (&outcome, &query.within)
@@ -87,7 +92,7 @@ impl Server {
             LookupOutcome::Matched { results, .. } => {
                 let mut entries: Vec<Value> = results
                     .iter()
-                    .map(|hit| lookup_entry(hit, scoped))
+                    .map(|hit| lookup_entry(hit, scoped, described))
                     .collect();
                 if let Some(kind) = &params.kind {
                     entries.retain(|entry| entry["kind"] == *kind);
@@ -162,7 +167,7 @@ fn path_segment(path: &str) -> &str {
     path.rsplit('.').next().unwrap_or_default()
 }
 
-fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
+fn lookup_entry(hit: &LookupHit, scoped: bool, described: bool) -> Value {
     match hit {
         LookupHit::Function {
             spelling,
@@ -170,21 +175,30 @@ fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
             receiver,
             params,
             display_name,
+            description,
+            aliases,
             ..
         } => {
             let mut callable = json!({
-                "parameters": params.iter().map(callable_param_wire).collect::<Vec<_>>(),
+                "parameters": params
+                    .iter()
+                    .map(|param| callable_param_wire(param, described))
+                    .collect::<Vec<_>>(),
             });
             if let Some(receiver) = receiver {
                 callable["receiver"] = serde_json::to_value(receiver).expect("category string");
             }
-            json!({
+            let mut entry = json!({
                 "identity": format!("{CALLABLE_IDENTITY}{spelling}"),
                 "kind": function_kind.as_str(),
                 "spelling": spelling,
                 "displayName": display_name.as_deref().unwrap_or(spelling),
                 "callable": callable,
-            })
+            });
+            if described {
+                add_description_facts(&mut entry, description.as_deref(), aliases);
+            }
+            entry
         }
         LookupHit::EnumDomain {
             domain,
@@ -205,15 +219,28 @@ fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
         }
         LookupHit::EnumMember {
             spelling,
+            domain,
             member,
             display_name,
+            aliases,
             ..
-        } => json!({
-            "identity": format!("{ENUM_MEMBER_IDENTITY}{spelling}"),
-            "kind": "enumMember",
-            "spelling": spelling,
-            "displayName": display_name.as_deref().unwrap_or(member),
-        }),
+        } => {
+            let mut entry = json!({
+                "identity": format!("{ENUM_MEMBER_IDENTITY}{spelling}"),
+                "kind": "enumMember",
+                "spelling": spelling,
+                "displayName": display_name.as_deref().unwrap_or(member),
+            });
+            if described {
+                // A member alias is spelled like `spelling`, qualified by its domain.
+                let aliases: Vec<String> = aliases
+                    .iter()
+                    .map(|alias| format!("{domain}.{alias}"))
+                    .collect();
+                add_description_facts(&mut entry, None, &aliases);
+            }
+            entry
+        }
         LookupHit::Setting {
             path,
             display_name,
@@ -229,17 +256,21 @@ fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
         LookupHit::Parameter {
             callable, param, ..
         } => {
-            let mut fact = callable_param_wire(param);
+            let mut fact = callable_param_wire(param, false);
             fact.as_object_mut()
                 .expect("parameter object")
                 .remove("name");
-            json!({
+            let mut entry = json!({
                 "identity": format!("{PARAM_IDENTITY}{callable}/{}", param.name),
                 "kind": "parameter",
                 "spelling": param.name,
                 "displayName": param.name,
                 "parameter": fact,
-            })
+            });
+            if described {
+                add_description_facts(&mut entry, param.description.as_deref(), &[]);
+            }
+            entry
         }
         LookupHit::SettingPath { path, .. } => json!({
             "identity": format!("{SETTING_PATH_IDENTITY}{path}"),
@@ -262,7 +293,18 @@ fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
     }
 }
 
-fn callable_param_wire(param: &LookupParam) -> Value {
+/// The LPP 1.8 `description` and `aliases` entry fields; each is omitted
+/// when empty.
+fn add_description_facts(entry: &mut Value, description: Option<&str>, aliases: &[String]) {
+    if let Some(description) = description {
+        entry["description"] = json!(description);
+    }
+    if !aliases.is_empty() {
+        entry["aliases"] = json!(aliases);
+    }
+}
+
+fn callable_param_wire(param: &LookupParam, described: bool) -> Value {
     let mut wire = json!({
         "name": param.name,
         "type": param.param_type.as_deref().unwrap_or("any"),
@@ -270,6 +312,9 @@ fn callable_param_wire(param: &LookupParam) -> Value {
     });
     if let Some(default) = &param.default {
         wire["default"] = json!(default);
+    }
+    if let Some(description) = param.description.as_deref().filter(|_| described) {
+        wire["description"] = json!(description);
     }
     if let Some(domain) = &param.domain {
         wire["enum"] = enum_wire(

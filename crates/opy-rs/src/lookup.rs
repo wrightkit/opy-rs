@@ -3,7 +3,9 @@ use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 
 use crate::lower::special_forms::SPECIAL_FUNCTIONS;
-use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory};
+mod params;
+
+use crate::manifest::{FunctionKind, Manifest, ParamDefault, ReceiverCategory};
 
 pub const DEFAULT_LIMIT: usize = 8;
 
@@ -180,6 +182,12 @@ pub enum LookupHit {
         catalog_id: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         display_name: Option<String>,
+        /// What the catalog says the construct does, in `en-US`.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        /// The other spellings the reference accepts for this function.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        aliases: Vec<String>,
         matched_on: MatchKind,
     },
     EnumDomain {
@@ -234,6 +242,13 @@ pub enum LookupFunctionKind {
     MemberValue,
 }
 
+fn lookup_kind(kind: FunctionKind) -> Kind {
+    match kind {
+        FunctionKind::Action | FunctionKind::MemberAction => Kind::Action,
+        FunctionKind::Value | FunctionKind::MemberValue => Kind::Value,
+    }
+}
+
 impl LookupFunctionKind {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -260,6 +275,9 @@ pub struct LookupParam {
     pub param_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
+    /// What the catalog says the parameter means, in `en-US`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -768,12 +786,14 @@ impl<'a> Index<'a> {
         for function in self.manifest.functions() {
             let mut forms = vec![(function.id.clone(), MatchKind::OpySpelling)];
             let mut display_name = None;
+            let mut description = None;
             if let Some(catalog_id) = &function.catalog_id {
                 forms.push((catalog_id.clone(), MatchKind::CatalogId));
-                let kind = match function.kind {
-                    FunctionKind::Action | FunctionKind::MemberAction => Kind::Action,
-                    FunctionKind::Value | FunctionKind::MemberValue => Kind::Value,
-                };
+                let kind = lookup_kind(function.kind);
+                description = self
+                    .catalog
+                    .description(kind, catalog_id, &locale)
+                    .map(|description| description.text);
                 if let Some(entry) = self.catalog.entry(kind, catalog_id) {
                     display_name = entry.spelling(&locale).map(str::to_string);
                     for spelling in entry.spellings(&locale) {
@@ -791,11 +811,13 @@ impl<'a> Index<'a> {
                     }
                 }
             }
+            let mut aliases = Vec::new();
             for alias in self.manifest.aliases() {
                 if crate::matcher::alias_target(alias, self.manifest)
                     .is_some_and(|target| std::ptr::eq(target, function))
                 {
                     forms.push((alias.source.clone(), MatchKind::Alias));
+                    aliases.push(alias.source.clone());
                 }
             }
             let params = self.lookup_params(function);
@@ -814,6 +836,8 @@ impl<'a> Index<'a> {
                     params,
                     catalog_id: function.catalog_id.clone(),
                     display_name,
+                    description,
+                    aliases,
                     matched_on: MatchKind::OpySpelling,
                 },
             });
@@ -830,6 +854,7 @@ impl<'a> Index<'a> {
                     members: None,
                     param_type: Some(param.param_type.to_string()),
                     default: param.default.map(str::to_string),
+                    description: None,
                 })
                 .collect();
             self.candidates.push(Candidate {
@@ -842,89 +867,11 @@ impl<'a> Index<'a> {
                     params,
                     catalog_id: None,
                     display_name: None,
+                    description: None,
+                    aliases: Vec::new(),
                     matched_on: MatchKind::OpySpelling,
                 },
             });
-        }
-    }
-
-    fn lookup_params(&self, function: &Function) -> Vec<LookupParam> {
-        let catalog_entry = function.catalog_id.as_deref().and_then(|catalog_id| {
-            let kind = match function.kind {
-                FunctionKind::Action | FunctionKind::MemberAction => Kind::Action,
-                FunctionKind::Value | FunctionKind::MemberValue => Kind::Value,
-            };
-            self.catalog.entry(kind, catalog_id)
-        });
-        function
-            .params
-            .iter()
-            .enumerate()
-            .map(|(index, param)| {
-                let catalog_index = self.catalog_param_index(catalog_entry, function, param, index);
-                let (param_type, catalog_domain) = catalog_index
-                    .and_then(|i| {
-                        catalog_entry.map(|entry| {
-                            (
-                                entry.param_type(i).map(str::to_string),
-                                entry.param_domain(i).map(str::to_string),
-                            )
-                        })
-                    })
-                    .unwrap_or((None, None));
-                // The reported domain is the reference source spelling:
-                // a catalog-declared `Clipping` slot renders as `Clip`.
-                let domain = param
-                    .domain
-                    .clone()
-                    .or(catalog_domain)
-                    .map(|domain| crate::enums::opy_domain(&domain).to_string());
-                let required = !param.optional && param.default.is_none();
-                let members = domain
-                    .as_deref()
-                    .and_then(|domain| crate::enums::domain_members(domain, self.catalog))
-                    .map(|members| members.iter().map(member_entry).collect::<Vec<_>>());
-                let default = param
-                    .default
-                    .as_ref()
-                    .map(|d| default_text(d, domain.as_deref(), self.catalog));
-                LookupParam {
-                    name: param.name.clone(),
-                    alternate_names: param.alternate_names.clone(),
-                    required,
-                    members,
-                    domain,
-                    param_type,
-                    default,
-                }
-            })
-            .collect()
-    }
-
-    fn catalog_param_index(
-        &self,
-        entry: Option<&workshop_rs::catalog::CatalogEntry>,
-        function: &Function,
-        param: &Param,
-        index: usize,
-    ) -> Option<usize> {
-        let entry = entry?;
-        let count = entry.param_count();
-        let offset = usize::from(function.kind.is_member() && count == function.params.len() + 1);
-        let folded = crate::matcher::fold(&param.name);
-        let by_name = |i: usize| {
-            entry
-                .param_name(i)
-                .is_some_and(|name| crate::matcher::fold(name) == folded)
-        };
-        if count == function.params.len() + offset {
-            let candidate = index + offset;
-            match (0..count).position(&by_name) {
-                Some(i) => Some(i),
-                None => (candidate < count).then_some(candidate),
-            }
-        } else {
-            (0..count).find(|&i| by_name(i))
         }
     }
 
