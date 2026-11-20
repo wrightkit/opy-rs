@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.10](https://github.com/wrightkit/opy-rs/compare/v0.4.9...v0.4.10) - 2026-11-20
+
+### Added
+
+- *(provider)* supply lookup descriptions and aliases in LPP 1.8 ([#769](https://github.com/wrightkit/opy-rs/pull/769))
+
+### Fixed
+
+- *(reconstruct)* refuse indexed self-referential sets in convert --target opy ([#763](https://github.com/wrightkit/opy-rs/pull/763))
+
+### Other
+
+- simplify OverPy preprocessing and compiler internals ([#766](https://github.com/wrightkit/opy-rs/pull/766))
+
 ## [0.4.9](https://github.com/wrightkit/opy-rs/compare/v0.4.8...v0.4.9) - 2026-11-19
 
 ### Other
