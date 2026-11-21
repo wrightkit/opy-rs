@@ -227,16 +227,17 @@ fn upstream_decompiler_corpus_matches_the_recorded_classification() {
 }
 
 #[test]
-fn catalogued_hero_settings_outside_the_overpy_schema_round_trip() {
+fn localized_hero_settings_round_trip_with_verbatim_fallback() {
     let catalog = Catalog::builtin_ref().expect("catalog loads");
     let manifest = Manifest::builtin().expect("manifest loads");
     let compiler = Compiler::new().expect("compiler loads");
+    let brigitte_cooldown = r#""shieldBashCooldown%": 400"#;
     let cases = [
         (
             "en-US",
             include_str!("fixtures/reconstruction/hero_verbatim/en-US.ow"),
             [
-                r#""Shield Bash Cooldown Time": "400%""#,
+                brigitte_cooldown,
                 r#""Ultimate Duration": "150%""#,
                 r#""Infinite Ultimate Duration": "On""#,
                 r#""No Ammunition Requirement": "Off""#,
@@ -246,19 +247,19 @@ fn catalogued_hero_settings_outside_the_overpy_schema_round_trip() {
             "zh-CN",
             include_str!("fixtures/reconstruction/hero_verbatim/zh-CN.ow"),
             [
-                r#""能量盾击冷却时间": "400%""#,
+                brigitte_cooldown,
                 r#""终极技能持续时间": "150%""#,
                 r#""终极技能持续时间无限": "开启""#,
                 r#""无需装弹": "关闭""#,
             ],
         ),
     ];
-    for (language, workshop, verbatim_members) in cases {
+    for (language, workshop, expected_members) in cases {
         let locale = Locale::new(language);
         let program = workshop_rs::parser::parse(workshop, catalog, &locale).unwrap();
         let opy = reconstruct_with(&program, manifest, catalog, &locale)
             .unwrap_or_else(|error| panic!("{language}: {error}"));
-        for member in verbatim_members {
+        for member in expected_members {
             assert!(opy.contains(member), "{language}: missing {member}\n{opy}");
         }
         let recompiled = compiler

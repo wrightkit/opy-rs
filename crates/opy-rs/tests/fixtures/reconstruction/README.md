@@ -13,11 +13,16 @@ source and licensing policy in `docs/compatibility/source-policy.md` apply.
 
 ## Localized hero settings
 
-`hero_verbatim/` contains synthetic Workshop inputs for per-hero settings
-that require verbatim OPY spelling. The fixtures exercise Brigitte's
-Shield Bash cooldown, Mauga's infinite ultimate, Sojourn's ultimate
-duration, and Kiriko's infinite ammo in en-US and zh-CN. The round-trip
-test lives in `crates/opy-rs/tests/reconstruction_corpus.rs`.
+`hero_verbatim/` contains synthetic Workshop inputs in en-US and zh-CN.
+Both labels for Brigitte's Shield Bash cooldown resolve to
+`shieldBashCooldown%`. The pinned OverPy 9.7.17 decompiler and `opy-rs`
+reconstruction emit the numeric value `400` under that key. The decompiler
+omits Mauga's infinite ultimate, Sojourn's ultimate duration, and Kiriko's
+infinite ammo because they fall outside their per-hero schemas.
+Reconstruction preserves those settings as localized quoted keys and values
+that the pinned OverPy compiler accepts verbatim. The round-trip test in
+`crates/opy-rs/tests/reconstruction_corpus.rs` checks the emitted forms and
+canonical program equivalence in both locales.
 
 ## Upstream decompiler inputs
 
