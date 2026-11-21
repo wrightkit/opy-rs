@@ -25,9 +25,10 @@
       "sha256": "b2b1ab8dd81a585e024795f1326d32142196c85794a0da679af89e85cdef1cd1",
       "status": "refused",
       "codes": [
-        "unsupported-settings"
+        "unsupported-settings",
+        "unsupported-value-call"
       ],
-      "note": "'Competitive Rules'/'disabled maps' settings members that reparse under catalogued display names."
+      "note": "'Competitive Rules'/'disabled maps' settings members reparse under catalogued display names. Strict optimization also rewrites value trees in actions and rule conditions."
     },
     {
       "id": "shionSettings",

@@ -8,14 +8,14 @@ const RANDOM_CALLS: [&str; 4] = [
 ];
 
 pub(in crate::compiler) fn same(left: &Value, right: &Value) -> bool {
-    same_with_random(left, right, false)
+    compare(left, right, false)
 }
 
 pub(in crate::compiler) fn same_shape(left: &Value, right: &Value) -> bool {
-    same_with_random(left, right, true)
+    compare(left, right, true)
 }
 
-fn same_with_random(left: &Value, right: &Value, allow_random: bool) -> bool {
+fn compare(left: &Value, right: &Value, shape_only: bool) -> bool {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => a == b,
         (Value::String(a), Value::String(b))
@@ -24,11 +24,17 @@ fn same_with_random(left: &Value, right: &Value, allow_random: bool) -> bool {
         | (Value::Subroutine(a), Value::Subroutine(b)) => a == b,
         (Value::Bool(a), Value::Bool(b)) => a == b,
         (Value::Null, Value::Null) | (Value::EventPlayer, Value::EventPlayer) => true,
-        (Value::Array(a), Value::Array(b)) => {
-            a.len() == b.len()
-                && a.iter()
-                    .zip(b)
-                    .all(|(a, b)| same_with_random(a, b, allow_random))
+        (Value::Array(a), Value::Array(b)) => compare_children(a, b, shape_only),
+        (Value::Array(elements), Value::Call { name, args })
+        | (Value::Call { name, args }, Value::Array(elements))
+            if shape_only =>
+        {
+            let array_name = if elements.is_empty() {
+                "emptyArray"
+            } else {
+                "array"
+            };
+            name == array_name && compare_children(elements, args, shape_only)
         }
         (
             Value::Vector {
@@ -42,9 +48,9 @@ fn same_with_random(left: &Value, right: &Value, allow_random: bool) -> bool {
                 z: bz,
             },
         ) => {
-            same_with_random(ax, bx, allow_random)
-                && same_with_random(ay, by, allow_random)
-                && same_with_random(az, bz, allow_random)
+            compare(ax, bx, shape_only)
+                && compare(ay, by, shape_only)
+                && compare(az, bz, shape_only)
         }
         (
             Value::Enum {
@@ -65,16 +71,20 @@ fn same_with_random(left: &Value, right: &Value, allow_random: bool) -> bool {
                 player: bp,
                 variable: bv,
             },
-        ) => av == bv && same_with_random(ap, bp, allow_random),
+        ) => av == bv && compare(ap, bp, shape_only),
         (Value::Call { name: an, args: aa }, Value::Call { name: bn, args: ba }) => {
             an == bn
-                && (allow_random || !RANDOM_CALLS.contains(&an.as_str()))
-                && aa.len() == ba.len()
-                && aa
-                    .iter()
-                    .zip(ba)
-                    .all(|(a, b)| same_with_random(a, b, allow_random))
+                && (shape_only || !RANDOM_CALLS.contains(&an.as_str()))
+                && compare_children(aa, ba, shape_only)
         }
         _ => false,
     }
+}
+
+fn compare_children(left: &[Value], right: &[Value], shape_only: bool) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(a, b)| compare(a, b, shape_only))
 }

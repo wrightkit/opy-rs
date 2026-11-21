@@ -342,22 +342,25 @@ environment checks.
 | `unsupported-enum-domain` | Enum domain not source-exposed | refusal |
 | `unsupported-enum-member` | Member outside the domain or without an OPY spelling | refusal |
 | `unsupported-enum-domain-mismatch` | Argument enum domain ≠ declared parameter domain | refusal |
-| `unsupported-value-call` | Value call with no OPY form, dedicated-lowering name, `for`-iterable-only name in value position, an indexed `Set` re-lowered to `Modify` or with a matching self-read and an optimization-changed target or value, `valueInArray` at literal index 0 (re-lowers to `firstOf`), a non-identifier `memberAccess` member, or a lambda binder outside a callback | refusal; the other syntax-produced ids are implemented |
+| `unsupported-value-call` | Call without an equivalent OPY form, including dedicated-lowering names, `range` in value position, `valueInArray` at literal index 0, a non-identifier `memberAccess` member, or a lambda binder outside a callback. Also indexed `Set` rewritten as `Modify` or with a matching self-read and a rewritten target/value, and unsupported strict-mode rewrites. | refusal |
 
 ### Frontend re-normalization traps
 
-Reconstructed output starts with `#!optimizeStrict`, as upstream decompilation
-does. Strict mode keeps expressions such as `Add(x, 0)` and still folds
-constant expressions such as `Add(0, 1)`.
+Reconstruction starts with `#!optimizeStrict` and compares value trees to
+their optimized forms. Strict mode folds `Add(0, 1)`, rewrites
+`Subtract(x, 0)` to `x`, and preserves `Add(x, 0)`.
 
-A Set with an unfolded constant in its index or value can use
-`#!disableOptimizations` and `#!enableOptimizations` around the statement.
-The surrounding code continues to compile in strict mode. A Set that needs
-both optimization modes, such as an unfolded index paired with `First Of`,
-refuses with `unsupported-value-call` at the action span. Other action forms
-that need an unfolded value but have no supported unoptimized spelling
-receive the same diagnostic. An initializer rule with an unfolded value
-emits as an ordinary rule at its original position.
+A rewritten receiver, index, or value in a `Set` gets statement-scoped
+`#!disableOptimizations` and `#!enableOptimizations`. A `Set` that also
+needs optimization, such as an unfolded index paired with `First Of`,
+refuses at its action span. Rewritten initializers emit as ordinary rules
+in place.
+
+Other executable actions, including `If`, `Else If`, `While`, and `For`,
+refuse at the action span when strict mode changes a value. `Else If` falls
+back to the enclosing `If` span when needed. An enabled rule condition
+refuses at its own span if a rewrite drops it or changes its comparison.
+The code is `unsupported-value-call`.
 
 Every emitted form must survive frontend normalization under the equivalence
 contract. This includes re-associated variadic calls and synthesized rule

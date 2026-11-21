@@ -165,6 +165,7 @@ struct Emitter<'a> {
     generated_counter: usize,
     lambda_binders: Vec<(String, Option<String>)>,
     loop_depth: usize,
+    commented: bool,
 }
 
 type IndexedRule<'a> = (usize, &'a Rule);
@@ -237,6 +238,7 @@ impl<'a> Emitter<'a> {
             generated_counter: 0,
             lambda_binders: Vec::new(),
             loop_depth: 0,
+            commented: false,
         }
     }
 
@@ -406,7 +408,7 @@ impl<'a> Emitter<'a> {
                 _ => return None,
             };
             if player.is_some_and(|player| !self.is_event_player(player))
-                || self.folds_in_strict_mode(value)
+                || self.rewrites_in_strict_mode(value)
             {
                 return None;
             }
@@ -541,25 +543,13 @@ impl<'a> Emitter<'a> {
 
     fn emit_disabled_def_body(&mut self, rule_index: usize, rule: &Rule) {
         self.out.push_str("    # @Disabled\n");
-        for (condition_index, condition) in rule.conditions.iter().enumerate() {
-            self.emit_commented_condition(rule_index, condition_index, condition);
-        }
-        self.emit_commented_actions(rule_index, &rule.actions);
+        self.emit_commented(1, |this| {
+            for (condition_index, condition) in rule.conditions.iter().enumerate() {
+                this.emit_condition_line(rule_index, condition_index, condition);
+            }
+            this.emit_actions(rule_index, &rule.actions, 1);
+        });
         self.out.push_str("    pass\n");
-    }
-
-    fn emit_condition_line(
-        &mut self,
-        rule_index: usize,
-        condition_index: usize,
-        condition: &Condition,
-    ) {
-        self.out.push_str("    @Condition ");
-        self.emit_value(
-            &condition.value,
-            self.program.condition_span(rule_index, condition_index),
-        );
-        self.out.push('\n');
     }
 
     fn emit_commented_condition(
@@ -568,9 +558,9 @@ impl<'a> Emitter<'a> {
         condition_index: usize,
         condition: &Condition,
     ) {
-        let scratch = std::mem::take(&mut self.out);
-        self.emit_condition_line(rule_index, condition_index, condition);
-        self.flush_commented(scratch, 1);
+        self.emit_commented(1, |this| {
+            this.emit_condition_line(rule_index, condition_index, condition);
+        });
     }
 
     fn emit_event_annotation(&mut self, rule_index: usize, rule: &Rule) {
@@ -815,7 +805,11 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn flush_commented(&mut self, prior: String, level: usize) {
+    fn emit_commented(&mut self, level: usize, emit: impl FnOnce(&mut Self)) {
+        let prior = std::mem::take(&mut self.out);
+        let commented = std::mem::replace(&mut self.commented, true);
+        emit(self);
+        self.commented = commented;
         let fragment = std::mem::replace(&mut self.out, prior);
         let indent = Self::indent(level);
         for line in fragment.lines() {
@@ -842,15 +836,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn emit_commented_actions(&mut self, rule_index: usize, actions: &[Action]) {
-        if actions.is_empty() {
-            return;
-        }
-        let scratch = std::mem::take(&mut self.out);
-        self.emit_actions(rule_index, actions, 1);
-        self.flush_commented(scratch, 1);
-    }
-
     fn emit_action_block(
         &mut self,
         rule_index: usize,
@@ -870,16 +855,16 @@ impl<'a> Emitter<'a> {
                         | Action::While { .. }
                         | Action::ForGlobalVariable { .. }
                         | Action::ForPlayerVariable { .. } => {
-                            let scratch = std::mem::take(&mut self.out);
-                            self.emit_construct(
-                                rule_index,
-                                action_index,
-                                inner,
-                                actions,
-                                position,
-                                level,
-                            );
-                            self.flush_commented(scratch, level);
+                            self.emit_commented(level, |this| {
+                                this.emit_construct(
+                                    rule_index,
+                                    action_index,
+                                    inner,
+                                    actions,
+                                    position,
+                                    level,
+                                );
+                            });
                         }
                         Action::ElseIf { .. }
                         | Action::Else
@@ -892,11 +877,9 @@ impl<'a> Emitter<'a> {
                                 self.program.action_span(rule_index, action_index),
                             );
                         }
-                        _ => {
-                            let scratch = std::mem::take(&mut self.out);
-                            self.emit_single_action(rule_index, action_index, inner, level);
-                            self.flush_commented(scratch, level);
-                        }
+                        _ => self.emit_commented(level, |this| {
+                            this.emit_single_action(rule_index, action_index, inner, level);
+                        }),
                     }
                 }
                 _ => {
@@ -917,9 +900,10 @@ impl<'a> Emitter<'a> {
         position: &mut usize,
         level: usize,
     ) {
+        let span = self.program.action_span(rule_index, action_index);
+        self.check_block_header_rewrites(rule_index, action, span);
         match action {
             Action::If { condition } => {
-                let span = self.program.action_span(rule_index, action_index);
                 self.out.push_str(&Self::indent(level));
                 self.out.push_str("if ");
                 self.emit_value(
@@ -929,9 +913,11 @@ impl<'a> Emitter<'a> {
                 );
                 self.out.push_str(":\n");
                 self.emit_action_block(rule_index, actions, position, level + 1);
-                while let Some(Action::ElseIf { condition }) = actions.get(*position) {
+                while let Some(action @ Action::ElseIf { condition }) = actions.get(*position) {
                     let action_index = *position;
                     *position += 1;
+                    let branch_span = self.program.action_span(rule_index, action_index).or(span);
+                    self.check_block_header_rewrites(rule_index, action, branch_span);
                     self.out.push_str(&Self::indent(level));
                     self.out.push_str("elif ");
                     self.emit_value(
@@ -955,7 +941,6 @@ impl<'a> Emitter<'a> {
                 }
             }
             Action::While { condition } => {
-                let span = self.program.action_span(rule_index, action_index);
                 self.out.push_str(&Self::indent(level));
                 self.out.push_str("while ");
                 self.emit_value(
@@ -972,7 +957,6 @@ impl<'a> Emitter<'a> {
                 stop,
                 step,
             } => {
-                let span = self.program.action_span(rule_index, action_index);
                 if !declared(&self.program.global_variables, variable) {
                     self.issue(
                         "unsupported-dangling",
@@ -997,7 +981,6 @@ impl<'a> Emitter<'a> {
                 stop,
                 step,
             } => {
-                let span = self.program.action_span(rule_index, action_index);
                 if !declared(&self.program.player_variables, variable) {
                     self.issue(
                         "unsupported-dangling",

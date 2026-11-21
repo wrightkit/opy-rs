@@ -2,6 +2,7 @@ variables {
     global:
         0: A
         1: x
+        2: y
     player:
         0: P
         1: result
@@ -27,6 +28,9 @@ rule ("Global sets") {
         Set Global Variable(x, Value In Array(Global.A, Subtract(1, 1)));
         Set Global Variable(x, First Of(Global.A));
         Modify Global Variable At Index(A, 1, Add, 2);
+        Set Global Variable(y, If-Then-Else(True, Global.x, Global.y));
+        Set Global Variable(y, Subtract(Global.x, 0));
+        Set Global Variable(y, Add(Global.x, Global.x));
     }
 }
 
@@ -45,5 +49,21 @@ rule ("Player sets") {
         Set Player Variable(Event Player, result, Value In Array(Player Variable(Event Player, P), Subtract(1, 1)));
         Set Player Variable(Event Player, result, First Of(Player Variable(Event Player, P)));
         Modify Player Variable At Index(Event Player, P, 1, Add, 2);
+    }
+}
+
+rule ("Preserved condition") {
+    event { Ongoing - Each Player; All; All; }
+    conditions {
+        Compare(Is Alive(Event Player), ==, True);
+        disabled Compare(Global.x, ==, Add(1, 1));
+    }
+    actions {
+        disabled If(Compare(Global.x, <, Add(1, 1)));
+            While(Compare(Global.x, <, Add(2, 2)));
+                Set Global Variable(x, Add(1, 1));
+            End;
+        End;
+        Set Global Variable(y, 1);
     }
 }

@@ -111,6 +111,40 @@ rule ("incompatible action forms") {
 }
 
 #[test]
+fn refuses_rewritten_conditions_and_loop_bounds_at_their_spans() {
+    let catalog = Catalog::builtin_ref().unwrap();
+    let english = Locale::new("en-US");
+    let text = include_str!("fixtures/reconstruction/unfolded_constants/conditions.ow");
+    let input = workshop_rs::parser::parse(text, catalog, &english).unwrap();
+    for (language, _) in CASES {
+        let locale = Locale::new(language);
+        let localized = workshop_rs::emitter::emit(&input, catalog, &locale).unwrap();
+        let program = workshop_rs::parser::parse(&localized, catalog, &locale).unwrap();
+        let error = reconstruct_with(&program, Manifest::builtin().unwrap(), catalog, &locale)
+            .expect_err("strict optimization would change the rule or a block header");
+        let if_span = program.action_span(0, 0);
+        let expected = [
+            ("rule condition", program.condition_span(0, 0)),
+            ("if", if_span),
+            ("elseIf", program.action_span(0, 2).or(if_span)),
+            ("while", program.action_span(0, 5)),
+            ("forGlobalVariable", program.action_span(0, 8)),
+        ];
+        assert_eq!(error.issues.len(), expected.len(), "{language}: {error}");
+        for (name, span) in expected {
+            let span = span.expect("the parsed construct has a span");
+            let issue = error
+                .issues
+                .iter()
+                .find(|issue| issue.message.contains(&format!("'{name}'")))
+                .unwrap_or_else(|| panic!("{language}: missing diagnostic for {name}: {error}"));
+            assert_eq!(issue.code, "unsupported-value-call", "{language}: {error}");
+            assert_eq!(issue.span, Some(span), "{language}: {error}");
+        }
+    }
+}
+
+#[test]
 #[ignore = "requires the pinned OverPy install in tools/overpy/oracle"]
 fn unfolded_constants_round_trip_with_pinned_overpy() {
     let oracle =
