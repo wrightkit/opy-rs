@@ -9,17 +9,15 @@
   "source": "source.opy",
   "tests": {
     "source": {
-      "nativeStatus": "failure",
-      "relationship": "known-gap",
-      "ruleNames": false,
-      "diagnosticCode": "workshop-emission"
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": false
     },
     "compiler": {
-      "nativeStatus": "failure",
-      "relationship": "known-gap",
-      "comparison": "diagnostic-code",
-      "diagnosticCode": "workshop-emission",
-      "failureClass": "frontend"
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
     }
   }
 }

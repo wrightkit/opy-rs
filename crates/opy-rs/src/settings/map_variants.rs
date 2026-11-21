@@ -2,6 +2,7 @@ use crate::compile_time::Value;
 use crate::diag::{OpyError, OpyResult, Span};
 use crate::hir;
 use std::collections::HashMap;
+use workshop_rs::catalog::Catalog;
 
 pub(super) fn is_map_list(scope: u8, name: &str) -> bool {
     scope == 2 && matches!(name, "enabledMaps" | "disabledMaps")
@@ -110,11 +111,23 @@ fn resolve(element: &mut hir::SettingsListElement, value: Value, span: hir::Span
             .collect(),
         _ => return Err(error("map variants must be iterable")),
     };
+    let catalog = Catalog::builtin_ref()
+        .map_err(|error| OpyError::at("catalog-error", error.to_string(), Span::from_hir(span)))?;
+    let map = crate::enums::canonical_member(
+        "Map",
+        &crate::enums::camel_case_to_upper_case(&key),
+        catalog,
+    );
     let variants = variants
         .iter()
-        .map(super::value::display_value)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|message| error(&message))?;
+        .map(|value| {
+            let text = super::value::display_value(value).map_err(|message| error(&message))?;
+            let id = map
+                .as_ref()
+                .and_then(|(_, map_id)| catalog.map_variant_id(map_id, &text));
+            Ok(id.map_or(text, str::to_owned))
+        })
+        .collect::<OpyResult<Vec<_>>>()?;
     element.evaluated = Some(key);
     element.variant = (!variants.is_empty()).then(|| variants.join(" "));
     Ok(())
