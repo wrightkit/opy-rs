@@ -1,6 +1,39 @@
 use super::map_variants;
 use crate::diag::{OpyResult, Span};
 use crate::hir;
+use std::collections::HashSet;
+
+pub(super) fn validate_evaluated(value: &crate::compile_time::Value, span: Span) -> OpyResult<()> {
+    use crate::compile_time::Value;
+
+    match value {
+        Value::Object(entries) => {
+            let mut keys = HashSet::new();
+            for (key, value) in entries {
+                let Value::String(key) = key else {
+                    return Err(super::settings_expression_error(
+                        span,
+                        "compile-time object keys must be strings".to_string(),
+                    ));
+                };
+                if !keys.insert(key) {
+                    return Err(super::settings_expression_error(
+                        span,
+                        format!("duplicate key '{key}' in settings object"),
+                    ));
+                }
+                validate_evaluated(value, span)?;
+            }
+        }
+        Value::Array(values) | Value::Vector(values) => {
+            for value in values {
+                validate_evaluated(value, span)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
 
 /// A settings node from an evaluated compile-time value; `scope` tracks
 /// whether a list is a gamemode map list.
