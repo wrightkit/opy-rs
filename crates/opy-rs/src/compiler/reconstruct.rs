@@ -10,6 +10,7 @@ use workshop_rs::program::{
 use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 use workshop_rs::source::Span;
 
+use super::value_walk::uses_call;
 use crate::lexer::{is_ident_continue, is_ident_start, is_identifier};
 use crate::lower::special_forms::SpecialValueCall;
 use crate::lower::{NameNamespace, is_reserved_name};
@@ -20,6 +21,7 @@ mod enum_domain_args;
 mod set_rewrite;
 mod settings;
 mod settings_json;
+mod unfolded_constants;
 mod value_literals;
 
 const DECLARATION_SLOT_RANGE: std::ops::Range<u32> = 0..128;
@@ -403,7 +405,9 @@ impl<'a> Emitter<'a> {
                 ) => (Some(player), variable, value),
                 _ => return None,
             };
-            if player.is_some_and(|player| !self.is_event_player(player)) {
+            if player.is_some_and(|player| !self.is_event_player(player))
+                || self.folds_in_strict_mode(value)
+            {
                 return None;
             }
             let position = variables
@@ -890,7 +894,7 @@ impl<'a> Emitter<'a> {
                         }
                         _ => {
                             let scratch = std::mem::take(&mut self.out);
-                            self.emit_action(rule_index, action_index, inner, level);
+                            self.emit_single_action(rule_index, action_index, inner, level);
                             self.flush_commented(scratch, level);
                         }
                     }
@@ -1098,7 +1102,7 @@ impl<'a> Emitter<'a> {
         "    ".repeat(level)
     }
 
-    fn emit_action(
+    fn emit_single_action(
         &mut self,
         rule_index: usize,
         action_index: usize,
@@ -2432,18 +2436,6 @@ impl<'a> Emitter<'a> {
             }
         }
         self.out.push('"');
-    }
-}
-
-fn uses_call(value: &Value, name: &str) -> bool {
-    match value {
-        Value::Call {
-            name: call_name,
-            args,
-        } => call_name == name || args.iter().any(|arg| uses_call(arg, name)),
-        Value::Array(elements) => elements.iter().any(|element| uses_call(element, name)),
-        Value::Vector { x, y, z } => uses_call(x, name) || uses_call(y, name) || uses_call(z, name),
-        _ => false,
     }
 }
 

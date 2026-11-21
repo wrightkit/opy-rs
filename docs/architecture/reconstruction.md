@@ -346,19 +346,23 @@ environment checks.
 
 ### Frontend re-normalization traps
 
-Two frontend behaviors make a naive source emission change the program it
-recompiles to, and the contract accounts for both:
+Reconstructed output starts with `#!optimizeStrict`, as upstream decompilation
+does. Strict mode keeps expressions such as `Add(x, 0)` and still folds
+constant expressions such as `Add(0, 1)`.
 
-- Reconstructed output begins with `#!optimizeStrict`. Without it, the
-  frontend's default optimizations fold values such as `Add(x, 0)` into a
-  different canonical structure than the input carries.
-  `#!optimizeForSize` and other optimization-changing directives are
-  never emitted. Upstream emits the same directive for the same reason.
-- Any construct the frontend re-normalizes on the way to canonical form —
-  re-associated variadic calls, folded expressions, synthesized rule
-  placement — must be emitted in the shape that survives re-lowering, or
-  refused when no such shape exists. Recompile equivalence is the check,
-  not emitted-text plausibility.
+A Set with an unfolded constant in its index or value can use
+`#!disableOptimizations` and `#!enableOptimizations` around the statement.
+The surrounding code continues to compile in strict mode. A Set that needs
+both optimization modes, such as an unfolded index paired with `First Of`,
+refuses with `unsupported-value-call` at the action span. Other action forms
+that need an unfolded value but have no supported unoptimized spelling
+receive the same diagnostic. An initializer rule with an unfolded value
+emits as an ordinary rule at its original position.
+
+Every emitted form must survive frontend normalization under the equivalence
+contract. This includes re-associated variadic calls and synthesized rule
+placement. The [reconstruction checks](../../tools/overpy/README.md#reconstruction)
+exercise the resulting OPY against both compilers.
 
 ## Input coverage vs. the pinned upstream decompiler
 
