@@ -415,7 +415,9 @@ impl<'a> Emitter<'a> {
             let Some(entry) = self.settings_member(member, path, hero, display) else {
                 continue;
             };
-            if !seen.insert(member.name().to_string()) {
+            if !seen.insert(member.name().to_string())
+                || (entry.0 != member.name() && !seen.insert(entry.0.clone()))
+            {
                 self.refuse_settings(member, "is a duplicate settings member");
             }
             entries.push(entry);

@@ -1,0 +1,14 @@
+settings {
+    main { Mode Name: "t" }
+    modes { Team Deathmatch { } }
+    heroes {
+        Team 1 {
+            Brigitte { Shield Bash Cooldown Time: 400% }
+            Sojourn { Ultimate Duration: 150% }
+        }
+        Team 2 {
+            Mauga { Infinite Ultimate Duration: On }
+            Kiriko { No Ammunition Requirement: Off }
+        }
+    }
+}

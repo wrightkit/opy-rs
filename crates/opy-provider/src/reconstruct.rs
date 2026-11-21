@@ -1,3 +1,4 @@
+use opy_rs::manifest::Manifest;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use workshop_rs::catalog::Catalog;
@@ -43,13 +44,18 @@ pub(crate) fn reconstruct(value: Value) -> Result<Value, HandlerError> {
         .map_err(|error| invalid_artifact(error.to_string()))?;
     let program = workshop_rs::parser::parse(&text, catalog, &locale)
         .map_err(|error| invalid_artifact(error.to_string()))?;
-    match opy_rs::reconstruct::reconstruct(&program) {
+    let manifest = Manifest::builtin().map_err(|error| HandlerError::Lpp {
+        kind: "providerFailure",
+        details: json!({ "code": "manifest-error" }),
+        message: format!("cannot load the OPY semantic compatibility manifest: {error}"),
+    })?;
+    match opy_rs::reconstruct::reconstruct_with(&program, manifest, catalog, &locale) {
         Ok(source) => Ok(json!({ "source": source })),
         Err(error) => {
             if error
                 .issues
                 .iter()
-                .all(|issue| matches!(issue.code, "manifest-error" | "catalog-error"))
+                .all(|issue| issue.code == "catalog-error")
             {
                 return Err(HandlerError::Lpp {
                     kind: "providerFailure",

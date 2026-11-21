@@ -11,6 +11,14 @@ never bundled into core builds or release artifacts. The general corpus
 policy in [`../corpus/README.md`](../corpus/README.md) and the repository's
 source and licensing policy in `docs/compatibility/source-policy.md` apply.
 
+## Localized hero settings
+
+`hero_verbatim/` contains synthetic Workshop inputs for per-hero settings
+that require verbatim OPY spelling. The fixtures exercise Brigitte's
+Shield Bash cooldown, Mauga's infinite ultimate, Sojourn's ultimate
+duration, and Kiriko's infinite ammo in en-US and zh-CN. The round-trip
+test lives in `crates/opy-rs/tests/reconstruction_corpus.rs`.
+
 ## Upstream decompiler inputs
 
 Pinned decompiler test inputs from the OverPy reference (GPL-3.0): the

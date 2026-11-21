@@ -88,9 +88,8 @@ fn single_issue(code: &'static str, message: String) -> ReconstructError {
 }
 
 /// The context-sensitive form of [`reconstruct`]: resolves identities through
-/// the supplied manifest and catalog. The locale selects the catalog
-/// spellings used for cross-checks (reconstruction emits OPY, which is
-/// locale-independent; `en-US` is the catalog's declared surface).
+/// the supplied manifest and catalog. The locale selects catalog cross-check
+/// spellings and the emitted labels and values of verbatim hero settings.
 pub fn reconstruct_with(
     program: &Program,
     manifest: &Manifest,
