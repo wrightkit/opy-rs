@@ -8,7 +8,7 @@ mod provenance;
 mod rules;
 mod values;
 
-use super::action_optimization::ActionOptimizer;
+use super::action_optimization::{ActionOptimizer, disabled_abort};
 use super::number_format::trim_numbers;
 use super::operator_optimization::{
     NUMBER_LIMIT, OperatorOptimizer, expand_log, same, self_modification,
@@ -713,9 +713,6 @@ impl<'a> Lowering<'a> {
                 let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
                 for value in action_values(&mut action) {
                     split_all(value);
-                }
-                if is_zero_skip(&action) {
-                    action = disabled_abort();
                 }
                 if optimization.enabled
                     && let Some(modification) = self_modification(&action)
@@ -1849,26 +1846,6 @@ fn used_bugged_maps(hir: &hir::Program) -> Vec<&'static str> {
         .into_iter()
         .filter(|map| found.contains(*map))
         .collect()
-}
-
-fn disabled_abort() -> workshop_rs::Action {
-    workshop_rs::Action::Disabled {
-        action: Box::new(workshop_rs::Action::Call {
-            name: "abort".to_string(),
-            args: Vec::new(),
-        }),
-    }
-}
-
-/// A skip over nothing does nothing; the pinned OverPy writes it as a
-/// disabled `Abort`.
-fn is_zero_skip(action: &workshop_rs::Action) -> bool {
-    matches!(
-        action,
-        workshop_rs::Action::Call { name, args }
-            if matches!(name.as_str(), "skip" | "skipIf")
-                && matches!(args.last(), Some(workshop_rs::Value::Number(distance)) if *distance == 0.0)
-    )
 }
 
 fn rule_from_parts(
