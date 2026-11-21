@@ -3353,12 +3353,11 @@ fn resolve_ids_spells_operators_and_source_forms() {
                 "appendToArray", "removeFromArray", "removeFromArrayByValue",
                 "removeFromArrayByIndex", "mappedArray", "sortedArray",
                 "isTrueForAll", "isTrueForAny",
-                "abort", "skip", "if", "elseIf", "else", "while",
+                "abort", "skip", "loopIf", "if", "elseIf", "else", "while",
                 "forGlobalVariable", "forPlayerVariable",
             ],
         }),
     ));
-    let calls = &response["result"]["calls"];
     let expected = json!({
         "add": "+", "subtract": "-", "multiply": "*", "divide": "/",
         "modulo": "%", "raiseToPower": "**",
@@ -3368,11 +3367,11 @@ fn resolve_ids_spells_operators_and_source_forms() {
         "removeFromArrayByValue": "remove", "removeFromArrayByIndex": "del",
         "mappedArray": "map", "sortedArray": "sorted",
         "isTrueForAll": "all", "isTrueForAny": "any",
-        "abort": "return", "skip": "goto",
+        "abort": "return", "skip": "goto", "loopIf": "__loopIf__",
         "if": "if", "elseIf": "elif", "else": "else", "while": "while",
         "forGlobalVariable": "for", "forPlayerVariable": "for",
     });
-    assert_eq!(*calls, expected);
+    assert_eq!(response["result"]["calls"], expected);
     session.shutdown();
 }
 
@@ -3391,7 +3390,7 @@ fn resolve_ids_omits_unspelled_and_unknown_ids() {
                 "all", "log", "getPlayers",
                 "end", "setGlobalVariable", "globalVariable",
                 "callSubroutine", "valueInArray", "firstOf",
-                "ifThenElse", "roundToInteger", "loopIf",
+                "ifThenElse", "roundToInteger",
             ],
             "enums": {
                 "Status": ["STUNNED", "NO_SUCH_MEMBER"],

@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n}\n\n//Optimize for size enabled\nrule (\"skip counts\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Skip If(Compare(Global.g, ==, 1), 3);\n        Set Global Variable(g, 5);\n        Set Global Variable(g, 6);\n        Set Global Variable(g, 7);\n        \"pass\"\n        disabled Abort;\n        Skip If(Compare(Global.g, ==, 3), True);\n        Set Global Variable(g, 8);\n    }\n}\n\n//Optimizations disabled\nrule (\"skip zero without optimization\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Skip If(Compare(Global.g, ==, 4), 0);\n        Set Global Variable(g, 9);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n}\n\n//Optimize for size enabled\nrule (\"skip counts\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Skip If(Compare(Global.g, ==, 1), 3);\n        Set Global Variable(g, 5);\n        Set Global Variable(g, 6);\n        Set Global Variable(g, 7);\n        \"pass\"\n        disabled Abort;\n        Skip If(Compare(Global.g, ==, 3), True);\n        Set Global Variable(g, 8);\n    }\n}\n\n//Optimizations disabled\nrule (\"skip zero without optimization\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Skip If(Compare(Global.g, ==, 4), 0);\n        Set Global Variable(g, 9);\n    }\n}\n\n",
+    "workshopSha256": "292147af9809d9fb9af4e363ed2200b2171d2503850048c4a2b9435a7c337f93"
+  },
+  "fixture": "synthetic/low-level-if-skip-counts",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "63e584ead520a2bc79d83e1dcc858abaa47d8b33cd613cd8f789df5418319c42"
+      }
+    ],
+    "sha256": "8e4608bd46e17468003a3861c47e5dbca59bed643e9324bd27ddc055e62420cd",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

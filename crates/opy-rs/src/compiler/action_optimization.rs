@@ -22,6 +22,9 @@ impl<'a> ActionOptimizer<'a> {
         };
         if self.enabled {
             match name.as_str() {
+                "skip" | "skipIf" if matches!(args.last(), Some(Value::Number(0.0))) => {
+                    *action = disabled_abort();
+                }
                 "createHudText" => {
                     for text in args.iter_mut().skip(1).take(3) {
                         if is_empty_string(text) {
@@ -80,6 +83,10 @@ impl<'a> ActionOptimizer<'a> {
             _ => for_each_child(value, |child| self.nested(child)),
         }
     }
+}
+
+pub(super) fn disabled_abort() -> Action {
+    Action::disabled(Action::call("abort", []))
 }
 
 /// Values the reference wraps in `First Of` where a Boolean is expected: `Null`,
