@@ -11,8 +11,8 @@ const SETTING_FACTORIES: &[(&str, &str)] = &[
 ];
 
 impl<'a> Emitter<'a> {
-    /// Array literals, Workshop setting values, event-player keywords and
-    /// `exclude`: the value calls whose OPY form is not a catalog call.
+    /// Array literals, Workshop setting values, event-player keywords,
+    /// `concat`/`exclude` and `gameMode`: the value calls whose OPY form is not a catalog call.
     pub(super) fn emit_literal_value(
         &mut self,
         name: &str,
@@ -29,11 +29,27 @@ impl<'a> Emitter<'a> {
             self.out.push_str(name);
             return true;
         }
-        if let ("removeFromArray", [array, removed]) = (name, args) {
+        if name == "hostPlayer" && args.is_empty() {
+            self.out.push_str(name);
+            return true;
+        }
+        if let ("removeFromArray" | "appendToArray", [array, operand]) = (name, args) {
             self.emit_parenthesized(array, span);
-            self.out.push_str(".exclude(");
-            self.emit_value(removed, span);
+            self.out.push_str(if name == "appendToArray" {
+                ".concat("
+            } else {
+                ".exclude("
+            });
+            self.emit_value(operand, span);
             self.out.push(')');
+            return true;
+        }
+        // `Gamemode.X` lowers to `gameMode(member)`; the member alone is the
+        // OPY spelling.
+        if let ("gameMode", [member @ Value::Enum { value_type, .. }]) = (name, args)
+            && value_type == "Gamemode"
+        {
+            self.emit_value(member, span);
             return true;
         }
         let Some((_, factory)) = SETTING_FACTORIES.iter().find(|(n, _)| *n == name) else {
