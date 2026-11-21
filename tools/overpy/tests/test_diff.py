@@ -499,7 +499,7 @@ class DiffTests(unittest.TestCase):
                 self.assertEqual(report_result["status"], "regression")
 
     def test_a_known_gap_still_needs_recorded_differences(self):
-        fixture = "synthetic/preprocessing"
+        fixture = "synthetic/team-numeric-literal"
         oracle = json.loads(
             (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
         )
@@ -543,7 +543,7 @@ class DiffTests(unittest.TestCase):
         return result
 
     def test_semantic_wir_gap_pin_matches_its_recorded_differences(self):
-        fixture = "synthetic/preprocessing"
+        fixture = "synthetic/team-numeric-literal"
         differences = [{"path": "Rule.actions.[0]", "index": 0}]
         with tempfile.TemporaryDirectory() as temporary:
             corpus = Path(temporary) / "corpus"
@@ -573,7 +573,7 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(report_result["status"], "known-gap")
 
     def test_semantic_wir_gap_pin_rejects_an_added_divergence(self):
-        fixture = "synthetic/preprocessing"
+        fixture = "synthetic/team-numeric-literal"
         oracle = json.loads(
             (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
         )
@@ -598,7 +598,7 @@ class DiffTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as temporary:
                     corpus = Path(temporary) / "corpus"
                     fixture = (
-                        "synthetic/preprocessing"
+                        "synthetic/team-numeric-literal"
                         if edit != "pin-other-comparison"
                         else "synthetic/basic-rule"
                     )

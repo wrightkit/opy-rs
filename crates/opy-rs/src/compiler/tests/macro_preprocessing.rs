@@ -33,11 +33,7 @@ fn included_macro_call_reaches_canonical_workshop_output() {
     assert_eq!(text_name, "customString");
     assert!(matches!(
         &text_args[0],
-        Value::String(value) if value.starts_with("ḍουḅIẹ(Pһạѕẹ.FINISHED)")
-    ));
-    assert!(matches!(
-        &text_args[1],
-        Value::Number(value) if *value == 2.0
+        Value::String(value) if value.starts_with("ḍουḅIẹ(Pһạѕẹ.FINISHED)\u{2028}= 2")
     ));
 }
 

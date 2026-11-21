@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/format-number-arguments-disabled",
+  "category": "synthetic",
+  "features": [
+    "structural convergence",
+    "disableOptimizations",
+    "semantics/format",
+    "syntax/macros"
+  ],
+  "source": "source.opy",
+  "attribution": {
+    "kind": "original",
+    "origin": "Written for wrightkit/opy-rs#743 to pin Number format arguments against the OverPy 9.7.17 oracle",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  },
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}
