@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/low-level-if-skip-counts",
+  "category": "compilation",
+  "features": [
+    "low-level conditional actions",
+    "skip counts",
+    "optimizeForSize"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

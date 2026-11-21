@@ -381,6 +381,13 @@
     },
     {
       "expect": "success",
+      "id": "low-level-if-actions",
+      "outputSha256": "2fa6b692d9c70b932b39bc1b86bf4d855738a8781dad3aa6dd7e4a6e9c389028",
+      "sha256": "9755ae9ababc25e52c7d3de3c5523027497388d32e89d1d7dd95881f4e816996",
+      "source": "../../../tests/fixtures/corpus/synthetic/low-level-if-actions/source.opy"
+    },
+    {
+      "expect": "success",
       "id": "upstream-keyword-arguments",
       "outputSha256": "e834b59737a863155b955ff26634d7137c65e2c0d4786163d85a768881719b51",
       "sha256": "d08a26049fcb814bb01bc79848a0fa0c3ffa035c62c08d00137ba5d0faba5fdb",
