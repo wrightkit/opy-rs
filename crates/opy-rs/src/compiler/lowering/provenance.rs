@@ -155,6 +155,12 @@ impl<'a> Lowering<'a> {
         for (action, id) in selected_actions.iter().copied().enumerate() {
             let span = self.action_origins[id];
             self.set_provenance(ProvenanceNode::Action { rule, action }, span, None)?;
+            if let workshop_rs::Action::Disabled { action: inner } =
+                &self.program.rules[rule].actions[action]
+                && matches!(inner.as_ref(), workshop_rs::Action::Call { args, .. } if args.is_empty())
+            {
+                continue;
+            }
             for argument in 0..self.action_argument_origins[id].len() {
                 let span = self.action_argument_origins[id][argument];
                 if span.is_some() {

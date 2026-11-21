@@ -299,12 +299,7 @@ pub fn sanitize_for_lex(text: &str, block: &SettingsBlock) -> String {
     out
 }
 
-/// Parse a settings block's JSONC text into a typed CST settings tree.
-///
-/// Grammar: quoted keys, `"`/`'` strings with `\` escapes, int/float numbers
-/// (f64), `true`/`false`, arrays of strings, nested objects, trailing commas
-/// in objects and arrays. Rejections (`settings-invalid`): duplicate keys,
-/// non-object root, missing `gamemodes` group, malformed values.
+/// Parse a settings block into a typed CST settings tree.
 pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
     let mut parser = Cursor::new(&block.text, block.content_file, block.text_start);
     parser.skip_whitespace();
@@ -321,10 +316,12 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
             "unexpected content after the settings object".to_string(),
         ));
     }
-    if !children
-        .iter()
-        .any(|node| matches!(node, cst::SettingsNode::Group { name, .. } if name == "gamemodes"))
-    {
+    if !children.iter().any(|node| match node {
+        cst::SettingsNode::Group { name, .. } | cst::SettingsNode::Raw { name, .. } => {
+            name == "gamemodes"
+        }
+        _ => false,
+    }) {
         return Err(OpyError::at(
             "settings-invalid",
             "settings block must contain a gamemodes group".to_string(),
@@ -460,13 +457,15 @@ fn eval_settings_text(
         })?;
     let mut stack = Vec::new();
     let value =
-        crate::compile_time::evaluate_settings(&expression, constants, &HashMap::new(), &mut stack);
-    value.ok_or_else(|| {
-        settings_expression_error(
-            diag_span,
-            "expression is not a compile-time value".to_string(),
-        )
-    })
+        crate::compile_time::evaluate_settings(&expression, constants, &HashMap::new(), &mut stack)
+            .ok_or_else(|| {
+                settings_expression_error(
+                    diag_span,
+                    "expression is not a compile-time value".to_string(),
+                )
+            })?;
+    value::validate_evaluated(&value, diag_span)?;
+    Ok(value)
 }
 
 fn settings_expression_error(span: Span, message: String) -> OpyError {

@@ -1055,6 +1055,48 @@
       "params": []
     },
     {
+      "catalogId": "skipIf",
+      "evidence": [
+        "low-level-if-actions"
+      ],
+      "id": "__skipIf__",
+      "kind": "action",
+      "params": [
+        {
+          "name": "condition"
+        },
+        {
+          "name": "numberOfActions"
+        }
+      ]
+    },
+    {
+      "catalogId": "abortIf",
+      "evidence": [
+        "low-level-if-actions"
+      ],
+      "id": "__abortIf__",
+      "kind": "action",
+      "params": [
+        {
+          "name": "condition"
+        }
+      ]
+    },
+    {
+      "catalogId": "loopIf",
+      "evidence": [
+        "low-level-if-actions"
+      ],
+      "id": "__loopIf__",
+      "kind": "action",
+      "params": [
+        {
+          "name": "condition"
+        }
+      ]
+    },
+    {
       "catalogId": "removeHealthPool",
       "evidence": [
         "builtin-surface"
