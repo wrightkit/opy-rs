@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.11](https://github.com/wrightkit/opy-rs/compare/v0.4.10...v0.4.11) - 2026-11-21
+
+### Fixed
+
+- keep numeric format arguments unfolded like upstream by consuming workshop-rs 1.30.0 ([#773](https://github.com/wrightkit/opy-rs/pull/773))
+- *(reconstruct)* reconstruct appendToArray, hostPlayer and gameMode in convert --target opy ([#771](https://github.com/wrightkit/opy-rs/pull/771))
+
 ## [0.4.10](https://github.com/wrightkit/opy-rs/compare/v0.4.9...v0.4.10) - 2026-11-20
 
 ### Added
