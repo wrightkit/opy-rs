@@ -4,19 +4,19 @@
     "exitCode": 0,
     "status": "success",
     "stdout": "",
-    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tdisabled maps\n\t\t\t{\n\t\t\t\tWatchpoint: Gibraltar 972777519512068292\n\t\t\t}\n\t\t}\n\t}\n}\n",
-    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tdisabled maps\n\t\t\t{\n\t\t\t\tWatchpoint: Gibraltar 972777519512068292\n\t\t\t}\n\t\t}\n\t}\n}\n\n",
-    "workshopSha256": "d6c34cc9ffa4e19889ded2a743e3012340d3390782101de474e6361474a897bb"
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tdisabled maps\n\t\t\t{\n\t\t\t\tWatchpoint: Gibraltar 972777519512068292\n\t\t\t\tBlizzard World 972777519512068194 42 0042\n\t\t\t}\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tdisabled maps\n\t\t\t{\n\t\t\t\tWatchpoint: Gibraltar 972777519512068292\n\t\t\t\tBlizzard World 972777519512068194 42 0042\n\t\t\t}\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "a531f85ac53dffdb9e25f870576a6147b7b5c7efb3834c32f82b2df23c261c0d"
   },
   "fixture": "synthetic/settings-map-variant-disabled",
   "input": {
     "files": [
       {
         "path": "source.opy",
-        "sha256": "44fc9db134888461de778e069b5b8d980c440efb26536ffa91cc771e740ba092"
+        "sha256": "68ef21d551ba99dfe54c3202ba45a0e0cdae050fe782fcc079b44dbf964f0025"
       }
     ],
-    "sha256": "c6e083285d056a7fe4da0e27c423bfb8e0c0f4855121fa492032d4485a8508ca",
+    "sha256": "3a602ee59bb04783d65de3daf09e174e8666b14a19acf58bc748938aaee08be9",
     "source": "source.opy"
   },
   "oracle": {

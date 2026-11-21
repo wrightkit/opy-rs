@@ -71,6 +71,36 @@ fn forward_compilation_reparses_in_every_pinned_workshop_locale() {
     }
 }
 
+#[test]
+fn named_map_variant_matches_the_zh_cn_oracle() {
+    let source = include_str!(
+        "../../../tests/fixtures/corpus/synthetic/settings-map-variant-named/source.opy"
+    );
+    // Pinned OverPy 9.7.17 output with `--language zh-CN`.
+    let reference = "设置
+{
+    模式
+    {
+        突击模式
+        {
+            启用地图
+            {
+                南极半岛 972777519512068154
+            }
+        }
+    }
+}";
+    let compiler = Compiler::new().unwrap();
+    let catalog = Catalog::builtin_ref().unwrap();
+    let locale = Locale::new("zh-CN");
+    let artifact = compiler
+        .compile_source_with_locale(source, "source.opy", Path::new("."), &locale)
+        .expect("named map variant should compile in zh-CN");
+    let native = parser::parse(&artifact.emitted, catalog, &locale).unwrap();
+    let reference = parser::parse(reference, catalog, &locale).unwrap();
+    assert!(equivalent(&native, &reference));
+}
+
 const NATIVE_IDENTITY_SOURCE: &str = r#"playervar v
 
 rule "native identities":
