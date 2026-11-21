@@ -34,6 +34,18 @@ impl<'a> Emitter<'a> {
             return true;
         }
         if let ("removeFromArray" | "appendToArray", [array, operand]) = (name, args) {
+            // `[a, b].concat(c)` folds into one array literal on recompile.
+            if is_array_literal(array) {
+                self.issue(
+                    "unsupported-value-call",
+                    format!(
+                        "'{name}' on an array literal receiver recompiles to a \
+                         different array literal on the OPY surface"
+                    ),
+                    span,
+                );
+                return true;
+            }
             self.emit_parenthesized(array, span);
             self.out.push_str(if name == "appendToArray" {
                 ".concat("
@@ -105,4 +117,9 @@ impl<'a> Emitter<'a> {
         self.issue("unsupported-value-call", message, span);
         true
     }
+}
+
+fn is_array_literal(value: &Value) -> bool {
+    matches!(value, Value::Array(_))
+        || matches!(value, Value::Call { name, .. } if matches!(name.as_str(), "array" | "emptyArray"))
 }

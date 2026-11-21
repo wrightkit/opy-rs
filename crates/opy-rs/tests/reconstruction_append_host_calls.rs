@@ -76,3 +76,67 @@ fn game_mode_round_trips() {
         &["Gamemode.SKIRMISH", "Gamemode.PRACTICE_RANGE"],
     );
 }
+
+#[test]
+fn array_literal_receivers_are_refused_by_construct() {
+    let cases = [
+        (
+            "Append To Array(Array(Global Variable(h), 2), 3)",
+            "appendToArray",
+            1,
+        ),
+        ("Append To Array(Array(1, 2), 3)", "appendToArray", 1),
+        ("Append To Array(Empty Array, 3)", "appendToArray", 1),
+        (
+            "Count Of(Append To Array(Array(Global Variable(h), 2), 3))",
+            "appendToArray",
+            1,
+        ),
+        (
+            "Append To Array(Append To Array(Array(Global Variable(h), 2), 3), 4)",
+            "appendToArray",
+            1,
+        ),
+        (
+            "Remove From Array(Array(Global Variable(h), 2), 2)",
+            "removeFromArray",
+            1,
+        ),
+        ("Remove From Array(Array(1, 2), 2)", "removeFromArray", 1),
+    ];
+    for (value, call, count) in cases {
+        for language in ["en-US", "zh-CN"] {
+            let program = program_in(
+                &rule(&format!("Set Global Variable(g, {value});")),
+                language,
+            );
+            let message = reconstruct(&program).expect_err("refused").to_string();
+            assert_eq!(
+                message.matches("unsupported-value-call").count(),
+                count,
+                "{language} {value}: {message}"
+            );
+            assert!(
+                message.contains(&format!("'{call}' on an array literal receiver")),
+                "{language} {value}: {message}"
+            );
+        }
+    }
+}
+
+#[test]
+fn array_literal_receiver_in_else_if_condition_is_refused() {
+    for language in ["en-US", "zh-CN"] {
+        let program = program_in(
+            &rule(
+                "If(Global Variable(h));\nElse If(Count Of(Append To Array(Array(Global Variable(h), 2), 3)));\nEnd;",
+            ),
+            language,
+        );
+        let message = reconstruct(&program).expect_err("refused").to_string();
+        assert!(
+            message.contains("'appendToArray' on an array literal receiver"),
+            "{language}: {message}"
+        );
+    }
+}
