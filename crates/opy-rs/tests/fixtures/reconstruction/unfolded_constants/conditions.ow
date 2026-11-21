@@ -1,0 +1,22 @@
+variables {
+    global:
+        0: x
+}
+
+rule ("unfolded conditions") {
+    event { Ongoing - Global; }
+    conditions { Compare(Add(0, 1), ==, Global.x); }
+    actions {
+        If(Compare(Add(0, 1), ==, Global.x));
+            Set Global Variable(x, 1);
+        Else If(Compare(Subtract(Global.x, 0), ==, 2));
+            Set Global Variable(x, 2);
+        End;
+        While(Compare(Global.x, <, Add(1, 1)));
+            Set Global Variable(x, 3);
+        End;
+        For Global Variable(x, 0, Add(1, 1), 1);
+            Wait(0.250, Ignore Condition);
+        End;
+    }
+}

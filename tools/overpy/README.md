@@ -49,6 +49,18 @@ Use `run_oracle.py --update` only when intentionally accepting a changed
 result from the pinned reference. Snapshot changes must be reviewed with the
 fixture input and concrete attribution/reproducibility data.
 
+## Reconstruction
+
+The decompiler corpus exercises Workshop → OPY → Workshop under the canonical
+comparison contract. The unfolded-constant fixtures also exercise the pinned
+OverPy compiler in both Workshop locales. Run these checks from the repository
+root after installing the pinned oracle.
+
+```sh
+cargo test --locked -p opy-rs --test reconstruction_corpus
+cargo test --locked -p opy-rs --test reconstruction_unfolded_constants -- --include-ignored
+```
+
 ## Builtin-call probe
 
 `probe_builtins.py` compares every catalog-backed manifest function with the

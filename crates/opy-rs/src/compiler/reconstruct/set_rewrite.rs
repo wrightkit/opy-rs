@@ -1,13 +1,9 @@
+use super::unfolded_constants::optimize_value;
 use super::*;
 use crate::compiler::operator_optimization::{
     OperatorOptimizer, reads_indexed_target, same_shape, self_modification,
 };
 use crate::compiler::value_walk::for_each_child;
-
-fn optimize_value(value: &mut Value, optimizer: &OperatorOptimizer<'_>) {
-    for_each_child(value, |child| optimize_value(child, optimizer));
-    *value = optimizer.node(std::mem::replace(value, Value::Null));
-}
 
 fn folded_self_read(
     value: &mut Value,

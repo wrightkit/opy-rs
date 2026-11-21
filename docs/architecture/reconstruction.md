@@ -342,23 +342,30 @@ environment checks.
 | `unsupported-enum-domain` | Enum domain not source-exposed | refusal |
 | `unsupported-enum-member` | Member outside the domain or without an OPY spelling | refusal |
 | `unsupported-enum-domain-mismatch` | Argument enum domain ≠ declared parameter domain | refusal |
-| `unsupported-value-call` | Value call with no OPY form, dedicated-lowering name, `for`-iterable-only name in value position, an indexed `Set` re-lowered to `Modify` or with a matching self-read and an optimization-changed target or value, `valueInArray` at literal index 0 (re-lowers to `firstOf`), a non-identifier `memberAccess` member, or a lambda binder outside a callback | refusal; the other syntax-produced ids are implemented |
+| `unsupported-value-call` | Call without an equivalent OPY form, including dedicated-lowering names, `range` in value position, `valueInArray` at literal index 0, a non-identifier `memberAccess` member, or a lambda binder outside a callback. Also indexed `Set` rewritten as `Modify` or with a matching self-read and a rewritten target/value, and unsupported strict-mode rewrites. | refusal |
 
 ### Frontend re-normalization traps
 
-Two frontend behaviors make a naive source emission change the program it
-recompiles to, and the contract accounts for both:
+Reconstruction starts with `#!optimizeStrict` and compares value trees to
+their optimized forms. Strict mode folds `Add(0, 1)`, rewrites
+`Subtract(x, 0)` to `x`, and preserves `Add(x, 0)`.
 
-- Reconstructed output begins with `#!optimizeStrict`. Without it, the
-  frontend's default optimizations fold values such as `Add(x, 0)` into a
-  different canonical structure than the input carries.
-  `#!optimizeForSize` and other optimization-changing directives are
-  never emitted. Upstream emits the same directive for the same reason.
-- Any construct the frontend re-normalizes on the way to canonical form —
-  re-associated variadic calls, folded expressions, synthesized rule
-  placement — must be emitted in the shape that survives re-lowering, or
-  refused when no such shape exists. Recompile equivalence is the check,
-  not emitted-text plausibility.
+A rewritten receiver, index, or value in a `Set` gets statement-scoped
+`#!disableOptimizations` and `#!enableOptimizations`. A `Set` that also
+needs optimization, such as an unfolded index paired with `First Of`,
+refuses at its action span. Rewritten initializers emit as ordinary rules
+in place.
+
+Other executable actions, including `If`, `Else If`, `While`, and `For`,
+refuse at the action span when strict mode changes a value. `Else If` falls
+back to the enclosing `If` span when needed. An enabled rule condition
+refuses at its own span if a rewrite drops it or changes its comparison.
+The code is `unsupported-value-call`.
+
+Every emitted form must survive frontend normalization under the equivalence
+contract. This includes re-associated variadic calls and synthesized rule
+placement. The [reconstruction checks](../../tools/overpy/README.md#reconstruction)
+exercise the resulting OPY against both compilers.
 
 ## Input coverage vs. the pinned upstream decompiler
 
