@@ -402,7 +402,7 @@ fn time_to_string_keeps_the_reference_shape_modulo_canonical_types() {
     );
     assert!(
         artifact.emitted.contains(
-            "Custom String(\"1:{0}:{1}\", String Slice(Custom String(\"102.63\"), 1, 2), String Slice(Custom String(\"137.65\"), 1, 9999))"
+            "Custom String(\"1:{0}:{1}\", String Slice(Custom String(\"{0}\", 102.6275), 1, 2), String Slice(Custom String(\"{0}\", 137.6500000000001), 1, 9999))"
         ),
         "{}",
         artifact.emitted

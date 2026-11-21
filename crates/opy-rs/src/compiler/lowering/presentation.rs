@@ -310,11 +310,15 @@ impl<'a> Lowering<'a> {
             value
         };
         // The reference splices literal string and null arguments into the
-        // `debug` format text; numbers fold the same way downstream at
-        // emission, while every other value keeps its `{0}` slot.
+        // `debug` format text, and numbers while optimizing; every other
+        // value keeps its `{0}` slot.
+        let optimized = self.optimization_state_at(argument_span.as_ref()).enabled;
         let constant_text = match self.value(array_text) {
             Value::String(text) => Some(text.clone()),
             Value::Null => Some("0".to_string()),
+            Value::Number(number) if optimized => {
+                crate::compile_time::display(crate::compile_time::Value::Number(*number))
+            }
             _ => None,
         };
         let debug_label_text = debug_source
