@@ -39,13 +39,12 @@ workshop_rs::Program ≡ input under the equivalence contract below
   `Program` concepts and provenance spans only; it never reads internal WIR
   or arena storage and never parses raw `.ws` text itself.
 - The output is standalone OPY text: no project files, no external metadata,
-  no required side channel. Output must be deterministic for a given input —
-  the same `Program` always reconstructs to the same source.
+  no required side channel. A given `Program` and reconstruction context
+  always produce the same source.
 - The public entry points are `opy_rs::reconstruct::reconstruct(&Program)`
   and `opy_rs::reconstruct::reconstruct_with(&Program, &Manifest, &Catalog,
-  &Locale)`. The catalog locale selects the spelling layer used for
-  cross-checks; emitted OPY is locale-independent (`en-US` is the catalog's
-  declared surface).
+  &Locale)`. The locale selects the spelling layer for catalog cross-checks
+  and verbatim hero settings. `reconstruct` defaults to `en-US`.
 - `opy-rs` owns the reconstruction mapping and the generated OPY structure.
   `workshop-rs` owns canonical Workshop meaning, the `Program` model,
   settings/localization facts, parsing, emission, and any comparison of
@@ -182,29 +181,26 @@ reference, so identity stays bound to the declaration index.
 
 #### Custom game settings
 
-`program.settings` reconstructs as a `settings { … }` JSONC object plus
-`#!extension` directives. The mapping uses the canonical
-`workshop_rs::settings` model only — `Settings`, `SettingsNode`,
-`SettingDefinition`/`domain()`/`enum_members()` at `definition(&path)` —
-and never introduces an OPY-local settings model.
+`program.settings` reconstructs from `workshop_rs::settings` as a
+`settings { … }` JSONC object plus `#!extension` directives.
 
-- **Emission gate.** `workshop_rs::settings::check_emission` runs first:
-  anything the canonical emitter cannot write back — unknown maps, heroes,
-  teams, modes, or kind-mismatched members — refuses as
-  `unsupported-settings` at the canonical span. A second walk then refuses
-  shapes the OPY settings frontend rewrites on reparse: an `enabled` mode
-  marker other than leading `enabled: false`, hero names the alias pass
-  renames (`mccree`, `hammond`), members whose `name: value` reparse lands
-  on a catalogued display name instead of staying raw, blocks under
-  boolean settings (reparse to `false`) or list settings (reparse as
-  lists), `settings.workshop` values outside the frontend's
-  `On`/`Off`/number/one-element-list forms, and duplicate members.
+- **Emission gate.** `workshop_rs::settings::check_emission` catches
+  unemittable settings as `unsupported-settings` at the canonical span.
+  Reconstruction also refuses mode `enabled` markers other than leading
+  `enabled: false`, hero aliases (`mccree`, `hammond`), raw members that
+  reparse under a catalogued display name, boolean/list-domain blocks,
+  `settings.workshop` values outside its `On`/`Off`/number/one-element-list
+  forms, and duplicate members.
 - **Key ordering.** Object members emit in the canonical child order, with
   the two reorderings the frontend's own normalization applies: a mode's
   `enabled` marker first, a team's `general` leaf members after its hero
-  groups and rosters. Emitted keys are the canonical setting keys
-  (`skirmish`, `enabledMaps`, `ability1Cooldown%`), which the OPY
-  settings lowerer resolves back through the same catalog.
+  groups and rosters. The lowerer resolves canonical setting keys
+  (`skirmish`, `enabledMaps`, `ability1Cooldown%`) through the same catalog.
+- **Verbatim hero settings.** Numeric and boolean hero members outside the
+  pinned OverPy per-hero schema emit the localized Workshop label and value
+  as quoted strings. This requires the emitted spelling to reparse to the
+  same canonical member. Recompile these settings in the reconstruction
+  locale to preserve those literal spellings.
 - **Layout.** The block follows the pinned upstream decompiler's
   `JSON.stringify(result, null, 4)` layout: four-space indentation,
   quoted keys, empty objects/arrays inline (`{}`, `[]`), no trailing
@@ -557,8 +553,8 @@ recorded against the boundary contract, not approximated locally.
 
 ## Verification contract
 
-- Every accepted input must produce OPY that checks clean and recompiles
-  to a program equivalent to the input under this contract's comparator —
+- Every accepted input must produce OPY that checks without errors and
+  recompiles to an equivalent program under this contract's comparator —
   `Program → OPY → Program`. A round-trip failure on an accepted input is
   a defect, regardless of which stage produced it.
 - The behavior-comparator gate is `workshop_rs::compare::equivalent`

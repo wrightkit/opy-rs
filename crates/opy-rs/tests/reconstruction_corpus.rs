@@ -2,7 +2,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use opy_rs::Compiler;
-use opy_rs::reconstruct::reconstruct;
+use opy_rs::manifest::Manifest;
+use opy_rs::reconstruct::{reconstruct, reconstruct_with};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use workshop_rs::catalog::{Catalog, Locale};
@@ -223,6 +224,53 @@ fn upstream_decompiler_corpus_matches_the_recorded_classification() {
         "upstream decompiler corpus drifted from the recorded classification:\n{}",
         failures.join("\n")
     );
+}
+
+#[test]
+fn catalogued_hero_settings_outside_the_overpy_schema_round_trip() {
+    let catalog = Catalog::builtin_ref().expect("catalog loads");
+    let manifest = Manifest::builtin().expect("manifest loads");
+    let compiler = Compiler::new().expect("compiler loads");
+    let cases = [
+        (
+            "en-US",
+            include_str!("fixtures/reconstruction/hero_verbatim/en-US.ow"),
+            [
+                r#""Shield Bash Cooldown Time": "400%""#,
+                r#""Ultimate Duration": "150%""#,
+                r#""Infinite Ultimate Duration": "On""#,
+                r#""No Ammunition Requirement": "Off""#,
+            ],
+        ),
+        (
+            "zh-CN",
+            include_str!("fixtures/reconstruction/hero_verbatim/zh-CN.ow"),
+            [
+                r#""能量盾击冷却时间": "400%""#,
+                r#""终极技能持续时间": "150%""#,
+                r#""终极技能持续时间无限": "开启""#,
+                r#""无需装弹": "关闭""#,
+            ],
+        ),
+    ];
+    for (language, workshop, verbatim_members) in cases {
+        let locale = Locale::new(language);
+        let program = workshop_rs::parser::parse(workshop, catalog, &locale).unwrap();
+        let opy = reconstruct_with(&program, manifest, catalog, &locale)
+            .unwrap_or_else(|error| panic!("{language}: {error}"));
+        for member in verbatim_members {
+            assert!(opy.contains(member), "{language}: missing {member}\n{opy}");
+        }
+        let recompiled = compiler
+            .compile_source_with_locale(&opy, "reconstructed.opy", Path::new("."), &locale)
+            .unwrap_or_else(|error| panic!("{language}: {error:?}\n{opy}"));
+        let reparsed = workshop_rs::parser::parse(&recompiled.emitted, catalog, &locale).unwrap();
+        assert!(
+            workshop_rs::compare::equivalent(&program, &reparsed),
+            "{language}: {:?}\n{opy}",
+            workshop_rs::compare::difference(&program, &reparsed)
+        );
+    }
 }
 
 fn hex(digest: impl AsRef<[u8]>) -> String {

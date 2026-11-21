@@ -95,6 +95,18 @@ impl<'a> Emitter<'a> {
             );
             return None;
         }
+        if let Some(hero) = hero
+            && matches!(
+                member,
+                SettingsNode::Number { .. } | SettingsNode::Bool { .. }
+            )
+            && !crate::compiler::settings::hero_setting_applies(hero, member.name())
+        {
+            return self.verbatim_hero_member(hero, member).or_else(|| {
+                self.refuse_settings(member, "has no recompile-equivalent verbatim form");
+                None
+            });
+        }
         let name = member.name().to_string();
         match member {
             SettingsNode::Number { value, .. } => {
@@ -277,6 +289,45 @@ impl<'a> Emitter<'a> {
                 None
             }
         }
+    }
+
+    fn verbatim_hero_member(
+        &self,
+        hero: &str,
+        member: &SettingsNode,
+    ) -> Option<(String, SettingsJson)> {
+        let group = |name: &str, children| SettingsNode::Group {
+            name: name.to_string(),
+            children,
+            span: None,
+        };
+        let mut program = Program::default();
+        program.settings = Some(workshop_rs::settings::Settings {
+            span: None,
+            children: vec![group(
+                "heroes",
+                vec![group("allTeams", vec![group(hero, vec![member.clone()])])],
+            )],
+        });
+        let text = workshop_rs::emitter::emit(&program, self.catalog, self.locale).ok()?;
+        let reparsed = workshop_rs::parser::parse(&text, self.catalog, self.locale).ok()?;
+        if !workshop_rs::compare::equivalent(&program, &reparsed) {
+            return None;
+        }
+        // OverPy 9.7.17 writes unrecognized hero labels and their string values verbatim.
+        let (name, value) = text
+            .lines()
+            .rev()
+            .map(str::trim)
+            .find(|line| !line.is_empty() && *line != "}")?
+            .rsplit_once(": ")?;
+        if !emittable_member_name(name)
+            || !emittable_raw_value(value)
+            || crate::compiler::settings::hero_setting_applies(hero, name)
+        {
+            return None;
+        }
+        Some((name.to_string(), SettingsJson::String(value.to_string())))
     }
 
     fn member_definition(
