@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.12](https://github.com/wrightkit/opy-rs/compare/v0.4.11...v0.4.12) - 2026-11-21
+
+### Fixed
+
+- reconstruct hero settings outside the OverPy schema in verbatim form ([#775](https://github.com/wrightkit/opy-rs/pull/775))
+- resolve named map variants through the workshop-rs catalog like upstream ([#774](https://github.com/wrightkit/opy-rs/pull/774))
+
+### Other
+
+- expect Brigitte's catalogued key after workshop-rs 1.31.0 in the verbatim settings round trip ([#781](https://github.com/wrightkit/opy-rs/pull/781))
+
 ## [0.4.11](https://github.com/wrightkit/opy-rs/compare/v0.4.10...v0.4.11) - 2026-11-21
 
 ### Fixed
