@@ -1055,6 +1055,19 @@
       "params": []
     },
     {
+      "catalogId": "skip",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "__skip__",
+      "kind": "action",
+      "params": [
+        {
+          "name": "numberOfActions"
+        }
+      ]
+    },
+    {
       "catalogId": "skipIf",
       "evidence": [
         "low-level-if-actions"
