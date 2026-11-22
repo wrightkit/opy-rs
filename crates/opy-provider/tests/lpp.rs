@@ -3358,7 +3358,7 @@ fn resolve_ids_spells_operators_and_source_forms() {
             ],
         }),
     ));
-    let expected = json!({
+    let want = json!({
         "add": "+", "subtract": "-", "multiply": "*", "divide": "/",
         "modulo": "%", "raiseToPower": "**",
         "==": "==", "!=": "!=", "<": "<", "<=": "<=", ">": ">", ">=": ">=",
@@ -3367,11 +3367,11 @@ fn resolve_ids_spells_operators_and_source_forms() {
         "removeFromArrayByValue": "remove", "removeFromArrayByIndex": "del",
         "mappedArray": "map", "sortedArray": "sorted",
         "isTrueForAll": "all", "isTrueForAny": "any",
-        "abort": "return", "skip": "goto", "loopIf": "__loopIf__",
+        "abort": "return", "skip": "__skip__", "loopIf": "__loopIf__",
         "if": "if", "elseIf": "elif", "else": "else", "while": "while",
         "forGlobalVariable": "for", "forPlayerVariable": "for",
     });
-    assert_eq!(response["result"]["calls"], expected);
+    assert_eq!(response["result"]["calls"], want);
     session.shutdown();
 }
 

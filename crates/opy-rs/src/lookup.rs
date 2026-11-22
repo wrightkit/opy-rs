@@ -432,7 +432,6 @@ const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
     ("__yComponentOf__", "y"),
     ("__zComponentOf__", "z"),
     ("abort", "return"),
-    ("skip", "goto"),
     ("break", "break"),
     ("continue", "continue"),
     ("if", "if"),

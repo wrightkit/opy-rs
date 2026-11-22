@@ -116,6 +116,7 @@ pub(crate) struct Lowering<'a> {
     array_bindings: Vec<ArrayBinding>,
     current_rule_conditions: Option<Vec<ValueId>>,
     visible_labels: Vec<HashSet<String>>,
+    relative_jump_preserved: HashSet<*const Stmt>,
     deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
     translation_uses: Vec<(String, Option<String>)>,
     optimized_nodes: HashMap<ValueId, bool>,
@@ -257,26 +258,6 @@ fn contains_loop_continue(statement: &Stmt) -> bool {
     }
 }
 
-fn switch_body_is_noop(statements: &[Stmt]) -> bool {
-    statements.iter().all(|statement| match statement {
-        Stmt::Pass { .. } | Stmt::Break { .. } => true,
-        Stmt::If {
-            branches, r#else, ..
-        } => {
-            branches
-                .iter()
-                .all(|branch| switch_body_is_noop(&branch.body))
-                && r#else.as_ref().is_none_or(|body| switch_body_is_noop(body))
-        }
-        Stmt::Switch { arms, .. } => arms.iter().all(|arm| match arm {
-            SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => {
-                switch_body_is_noop(body)
-            }
-        }),
-        _ => false,
-    })
-}
-
 impl<'a> Lowering<'a> {
     pub(super) fn new(compiler: &'a Compiler, hir: &'a hir::Program) -> Self {
         Self {
@@ -303,6 +284,7 @@ impl<'a> Lowering<'a> {
             optimization_queries: std::cell::RefCell::new(Vec::new()),
             used_maps: used_bugged_maps(hir),
             visible_labels: Vec::new(),
+            relative_jump_preserved: HashSet::new(),
             deferred_gotos: Vec::new(),
             translation_uses: Vec::new(),
         }

@@ -3,8 +3,11 @@ use crate::enums;
 
 mod constant_branches;
 mod constant_conditions;
+mod relative_jumps;
 mod switch;
 mod tail_negation;
+
+use relative_jumps::switch_body_is_noop;
 
 impl<'a> Lowering<'a> {
     pub(in crate::compiler) fn lower_rules(&mut self) -> Result<(), IntegrationError> {
@@ -39,7 +42,8 @@ impl<'a> Lowering<'a> {
         }
         let (conditions, stored) = self.lower_rule_conditions(&condition_exprs)?;
         let previous_conditions = self.current_rule_conditions.replace(stored);
-        let lowered_actions = self.lower_actions(&rule.actions, None);
+        self.prepare_relative_jump_passes(&rule.actions, rule.span);
+        let lowered_actions = self.lower_actions(&rule.actions, None, false);
         self.current_rule_conditions = previous_conditions;
         let actions = lowered_actions?;
         let selected_actions = self.useful_actions(&actions);
@@ -71,28 +75,6 @@ impl<'a> Lowering<'a> {
         Ok(())
     }
 
-    fn has_meaningful_rule_action(&self, actions: &[ActionId], event: &Event) -> bool {
-        actions
-            .iter()
-            .any(|action| match self.actions.get(*action) {
-                Some(
-                    Action::If { .. }
-                    | Action::ElseIf { .. }
-                    | Action::Else
-                    | Action::While { .. }
-                    | Action::End,
-                )
-                | None => false,
-                Some(Action::Call { name, .. }) => match name.as_str() {
-                    "abort" | "abortIf" | "break" | "continue" | "loop" | "loopIf" | "return"
-                    | "skip" | "skipIf" => false,
-                    "wait" => matches!(event, Event::Subroutine(_)),
-                    _ => true,
-                },
-                Some(_) => true,
-            })
-    }
-
     fn lower_subroutine(
         &mut self,
         name: &str,
@@ -120,7 +102,8 @@ impl<'a> Lowering<'a> {
                 name_span.or(span),
             ));
         }
-        let actions = self.lower_actions(body, None)?;
+        self.prepare_relative_jump_passes(body, span);
+        let actions = self.lower_actions(body, None, true)?;
         let event = Event::Subroutine(self.program.subroutines[subroutine].name.clone());
         if self.optimization_state_at(span.as_ref()).enabled
             && !self.has_meaningful_rule_action(&actions, &event)
@@ -402,6 +385,7 @@ impl<'a> Lowering<'a> {
         &mut self,
         statements: &[Stmt],
         break_target: Option<BreakTarget>,
+        outer_continues: bool,
     ) -> Result<Vec<ActionId>, IntegrationError> {
         self.visible_labels.push(
             statements
@@ -418,6 +402,7 @@ impl<'a> Lowering<'a> {
         for (index, statement) in statements.iter().enumerate() {
             let optimization = self.optimization_state_at(statement.span());
             if optimization.enabled
+                && !self.has_preserved_pass_in_if(statement)
                 && optimization.for_size
                 && optimization.for_size_aggressive
                 && index + 1 == statements.len()
@@ -430,7 +415,7 @@ impl<'a> Lowering<'a> {
                 && branches.len() == 1
                 && let Some(operand) = tail_negation::operand(self, &branches[0].condition)?
             {
-                let body = self.lower_actions(&branches[0].body, break_target)?;
+                let body = self.lower_actions(&branches[0].body, break_target, outer_continues)?;
                 if !body.is_empty() {
                     let condition = self.lower_value(operand)?;
                     let distance = self.canonical_action_width(&body, *span)?;
@@ -445,7 +430,9 @@ impl<'a> Lowering<'a> {
             if self.lower_conditional_label_jump(statement, &mut actions)? {
                 continue;
             }
-            if let Some((condition, offset, span)) = direct_conditional_dynamic_goto(statement) {
+            if optimization.enabled
+                && let Some((condition, offset, span)) = direct_conditional_dynamic_goto(statement)
+            {
                 let condition = self.lower_value(condition)?;
                 let offset = self.lower_value(offset)?;
                 let skip = self.push_call_action("skipIf", &[condition, offset]);
@@ -487,7 +474,11 @@ impl<'a> Lowering<'a> {
                         span.map(Into::into),
                     ));
                 }
-                _ => actions.extend(self.lower_action(statement, break_target)?),
+                _ => actions.extend(self.lower_action(
+                    statement,
+                    break_target,
+                    outer_continues || index + 1 < statements.len(),
+                )?),
             }
         }
         for (action, position, label, offset, span) in gotos {
@@ -627,9 +618,13 @@ impl<'a> Lowering<'a> {
         &mut self,
         stmt: &Stmt,
         break_target: Option<BreakTarget>,
+        followed: bool,
     ) -> Result<Vec<ActionId>, IntegrationError> {
+        if let Some(actions) = self.lower_aggressive_relative_pass(stmt, followed, break_target)? {
+            return Ok(actions);
+        }
         let result = match stmt {
-            Stmt::Pass { .. } => Ok(Vec::new()),
+            Stmt::Pass { .. } => Ok(self.lower_pass(stmt)),
             Stmt::Assign {
                 target,
                 value,
@@ -648,18 +643,27 @@ impl<'a> Lowering<'a> {
                 }
                 let branches = branches
                     .iter()
-                    .map(|branch| {
+                    .enumerate()
+                    .map(|(index, branch)| {
                         Ok((
                             self.lower_value(&branch.condition)?,
-                            self.lower_actions(&branch.body, break_target)?,
+                            self.lower_actions(
+                                &branch.body,
+                                break_target,
+                                followed || index + 1 < branches.len() || r#else.is_some(),
+                            )?,
                         ))
                     })
                     .collect::<Result<Vec<_>, IntegrationError>>()?;
                 let else_body = r#else
                     .as_ref()
-                    .map(|body| self.lower_actions(body, break_target))
+                    .map(|body| self.lower_actions(body, break_target, followed))
                     .transpose()?;
-                Ok(self.push_folded_if_actions(branches, else_body, *span))
+                if self.preserves_relative_jump_statement(stmt) {
+                    Ok(self.push_if_actions(branches, else_body))
+                } else {
+                    Ok(self.push_folded_if_actions(branches, else_body, *span))
+                }
             }
             Stmt::For {
                 variable,
@@ -702,7 +706,9 @@ impl<'a> Lowering<'a> {
             } => {
                 let condition = self.lower_value(condition)?;
                 let body = self.lower_loop_body(body)?;
-                if self.constant_condition(condition, *span) == Some(false) {
+                if !self.preserves_relative_jump_statement(stmt)
+                    && self.constant_condition(condition, *span) == Some(false)
+                {
                     return Ok(Vec::new());
                 }
                 Ok(self.push_while_actions(condition, body))
@@ -779,7 +785,7 @@ impl<'a> Lowering<'a> {
                     if name == "disableInspector" && args.is_empty() {
                         Ok(vec![self.push_call_action("disableInspector", &[])])
                     } else if name == "pass" && args.is_empty() {
-                        Ok(Vec::new())
+                        Ok(self.lower_pass(stmt))
                     } else if name == "debug" && args.len() == 1 {
                         Ok(vec![self.lower_debug(&args[0], debug_source.as_deref())?])
                     } else if name == "print" && args.len() == 1 {
@@ -1052,29 +1058,6 @@ impl<'a> Lowering<'a> {
         Ok(self.combine_conditions(values))
     }
 
-    fn lower_skip_with_distance(
-        &mut self,
-        conditions: &[&Expr],
-        distance: usize,
-        span: Option<HirSpan>,
-    ) -> Result<ActionId, IntegrationError> {
-        let mut args = Vec::with_capacity(conditions.len() + 1);
-        if let Some(condition) = self.lower_condition_chain(conditions)? {
-            args.push(condition);
-        }
-        args.push(self.push_number(distance as f64));
-        let skip = self.push_call_action(
-            if conditions.is_empty() {
-                "skip"
-            } else {
-                "skipIf"
-            },
-            &args,
-        );
-        self.mark_action_origins(std::slice::from_ref(&skip), span);
-        Ok(skip)
-    }
-
     fn lower_loop_sequence_with_break_target(
         &mut self,
         statements: &[Stmt],
@@ -1178,7 +1161,7 @@ impl<'a> Lowering<'a> {
                 index += 1;
                 continue;
             }
-            actions.extend(self.lower_action(statement, Some(break_target))?);
+            actions.extend(self.lower_action(statement, Some(break_target), true)?);
             index += 1;
         }
         Ok(actions)
@@ -1327,7 +1310,7 @@ impl<'a> Lowering<'a> {
                 return Ok(actions);
             }
 
-            actions.extend(self.lower_action(statement, Some(BreakTarget::DoWhile))?);
+            actions.extend(self.lower_action(statement, Some(BreakTarget::DoWhile), true)?);
         }
         Ok(actions)
     }
