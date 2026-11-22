@@ -1116,7 +1116,7 @@ fn format_substitute(value: &Value) -> Option<String> {
 
 pub(crate) fn display(value: Value) -> Option<String> {
     match value {
-        Value::Number(value) if value.is_finite() => Some(workshop_number_text(value)),
+        Value::Number(n) if n.abs() <= NUMBER_LIMIT => Some(workshop_number_text(n)),
         Value::String(value) => Some(value),
         Value::Bool(value) => Some(value.to_string()),
         _ => None,
