@@ -13,7 +13,7 @@ impl Lowering<'_> {
         if break_target.is_none()
             && arms.iter().all(|arm| match arm {
                 SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => {
-                    switch_body_is_noop(body)
+                    switch_body_is_noop(body, &self.relative_jump_preserved)
                 }
             })
         {
@@ -143,13 +143,13 @@ impl Lowering<'_> {
                 ));
             }
             let [break_marker] =
-                self.lower_action(&statements[index], Some(BreakTarget::Switch))?[..]
+                self.lower_action(&statements[index], Some(BreakTarget::Switch), true)?[..]
             else {
                 unreachable!("a switch break must lower to one Else marker")
             };
             marker = Some(break_marker);
             for statement in &statements[index + 1..] {
-                tail.extend(self.lower_action(statement, Some(BreakTarget::Switch))?);
+                tail.extend(self.lower_action(statement, Some(BreakTarget::Switch), true)?);
             }
         }
         let mut actions = Vec::new();
@@ -166,7 +166,7 @@ impl Lowering<'_> {
             )?);
         } else {
             for statement in &statements[..body_end] {
-                actions.extend(self.lower_action(statement, Some(BreakTarget::Switch))?);
+                actions.extend(self.lower_action(statement, Some(BreakTarget::Switch), true)?);
             }
         }
         let break_at = marker.map(|marker| (actions.len(), marker));
