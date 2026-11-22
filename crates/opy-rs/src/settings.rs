@@ -316,12 +316,7 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
             "unexpected content after the settings object".to_string(),
         ));
     }
-    if !children.iter().any(|node| match node {
-        cst::SettingsNode::Group { name, .. } | cst::SettingsNode::Raw { name, .. } => {
-            name == "gamemodes"
-        }
-        _ => false,
-    }) {
+    if !children.iter().any(value::is_gamemodes_cst) {
         return Err(OpyError::at(
             "settings-invalid",
             "settings block must contain a gamemodes group".to_string(),
@@ -347,7 +342,10 @@ pub(crate) fn resolve_hir_settings(
     let children = settings
         .children
         .into_iter()
-        .map(|node| resolve_hir_node(node, &constants, &mut expander, &mut lowerer, 0))
+        .map(|node| {
+            resolve_hir_node(node, &constants, &mut expander, &mut lowerer, 0)
+                .and_then(value::gamemodes_group)
+        })
         .collect::<OpyResult<Vec<_>>>()?;
     program.settings = Some(hir::Settings {
         span: settings.span,

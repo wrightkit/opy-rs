@@ -12,6 +12,8 @@ fn expression_gamemodes_match_the_reference_in_both_locales() {
     for fixture in [
         "settings-expression-gamemodes",
         "settings-expression-gamemodes-variants",
+        "settings-gamemodes-scalar-expression",
+        "settings-gamemodes-scalar-literal",
     ] {
         let root = corpus.join(fixture);
         let source = std::fs::read_to_string(root.join("source.opy")).unwrap();
@@ -94,4 +96,29 @@ fn settings_without_gamemodes_remain_invalid() {
         .compile_source(source, "missing.opy", root)
         .unwrap_err();
     assert_eq!(error.diagnostic.code, "settings-invalid");
+}
+
+#[test]
+fn scalar_gamemodes_compile_to_empty_modes_and_other_values_stay_rejected() {
+    let root = Path::new(".");
+    for value in ["(42)", "(0)", "(false)", "(true)", "(3.5)", "42", "true"] {
+        let source = format!("settings {{ \"gamemodes\": {value} }}\nrule \"r\":\n    pass\n");
+        let output = opy_rs::Compiler::new()
+            .unwrap()
+            .compile_source(&source, "scalar.opy", root)
+            .unwrap_or_else(|error| panic!("{value}: {error}"));
+        assert!(output.emitted_workshop.contains("modes"), "{value}");
+    }
+    for (value, kind) in [
+        ("(\"x\")", "a string"),
+        ("([1])", "a list"),
+        ("\"x\"", "a string"),
+    ] {
+        let source = format!("settings {{ \"gamemodes\": {value} }}\nrule \"r\":\n    pass\n");
+        let error = opy_rs::compile(&source, "bad.opy", root).unwrap_err();
+        assert_eq!(error.code, "settings-invalid", "{value}");
+        assert!(error.message.contains(kind), "{value}: {}", error.message);
+    }
+    let source = "settings { \"gamemodes\": (null) }\nrule \"r\":\n    pass\n";
+    assert!(opy_rs::compile(source, "null.opy", root).is_err());
 }

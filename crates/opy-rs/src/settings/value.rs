@@ -146,3 +146,42 @@ pub(super) fn display_value(value: &crate::compile_time::Value) -> Result<String
         }
     }
 }
+
+pub(super) fn is_gamemodes_cst(node: &crate::cst::SettingsNode) -> bool {
+    use crate::cst::SettingsNode as N;
+    matches!(node, N::Group { name, .. } | N::Raw { name, .. } | N::Number { name, .. }
+        | N::Bool { name, .. } | N::String { name, .. } | N::List { name, .. } if name == "gamemodes")
+}
+
+/// Upstream emits an empty `modes` group for a Number or Boolean
+/// `gamemodes` value and throws for any other non-object value (#787).
+pub(super) fn gamemodes_group(node: hir::SettingsNode) -> OpyResult<hir::SettingsNode> {
+    use crate::hir::SettingsNode as N;
+    let (kind, span) = match node {
+        N::Group { .. } => return Ok(node),
+        N::Number { ref name, .. }
+        | N::Bool { ref name, .. }
+        | N::String { ref name, .. }
+        | N::List { ref name, .. }
+        | N::Raw { ref name, .. }
+            if name != "gamemodes" =>
+        {
+            return Ok(node);
+        }
+        N::Number { name, span, .. } | N::Bool { name, span, .. } => {
+            return Ok(N::Group {
+                name,
+                children: Vec::new(),
+                span,
+            });
+        }
+        N::String { span, .. } => ("a string", span),
+        N::List { span, .. } => ("a list", span),
+        N::Raw { span, .. } => ("an expression", span),
+    };
+    let message = format!("the gamemodes value must be an object, not {kind}");
+    Err(match span {
+        Some(span) => crate::diag::OpyError::at("settings-invalid", message, Span::from_hir(span)),
+        None => crate::diag::OpyError::new("settings-invalid", message),
+    })
+}
