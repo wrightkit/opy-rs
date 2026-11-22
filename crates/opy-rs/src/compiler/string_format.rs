@@ -68,7 +68,7 @@ pub(super) fn merge(parts: Vec<Token>) -> (Vec<Token>, bool) {
             }
             Value::Number(number) if number.abs() <= NUMBER_LIMIT => {
                 changed = true;
-                let text = format!("{number:.2}").replace(".00", "");
+                let text = crate::number_text::workshop_number_text(number);
                 push_text(&mut merged, Token::Text(text));
             }
             // A bare string is the materialized `__customString__` literal:
