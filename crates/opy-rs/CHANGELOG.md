@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.14](https://github.com/wrightkit/opy-rs/compare/v0.4.13...v0.4.14) - 2026-11-22
+
+### Fixed
+
+- accept a Number or Boolean gamemodes value as empty modes like upstream ([#793](https://github.com/wrightkit/opy-rs/pull/793))
+- *(compiler)* keep 15-decimal folded numbers via workshop-rs 1.32.0 ([#792](https://github.com/wrightkit/opy-rs/pull/792))
+- *(compiler)* fold debug and format numbers with toFixed(2) rounding ([#791](https://github.com/wrightkit/opy-rs/pull/791))
+
 ## [0.4.13](https://github.com/wrightkit/opy-rs/compare/v0.4.12...v0.4.13) - 2026-11-22
 
 ### Added
