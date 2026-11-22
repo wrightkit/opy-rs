@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.13](https://github.com/wrightkit/opy-rs/compare/v0.4.12...v0.4.13) - 2026-11-22
+
+### Added
+
+- accept the low-level __skipIf__, __abortIf__ and __loopIf__ actions like upstream ([#783](https://github.com/wrightkit/opy-rs/pull/783))
+
+### Fixed
+
+- *(compiler)* preserve pass slots after relative jumps ([#790](https://github.com/wrightkit/opy-rs/pull/790))
+- *(compiler)* retain large numeric format arguments ([#789](https://github.com/wrightkit/opy-rs/pull/789))
+- reconstruct or refuse unfolded constant expressions so convert --target opy recompiles unchanged ([#782](https://github.com/wrightkit/opy-rs/pull/782))
+- accept an expression-built gamemodes settings group like upstream ([#784](https://github.com/wrightkit/opy-rs/pull/784))
+
 ## [0.4.12](https://github.com/wrightkit/opy-rs/compare/v0.4.11...v0.4.12) - 2026-11-21
 
 ### Fixed
