@@ -1,0 +1,19 @@
+设置
+{
+	模式
+	{
+		Skirmish
+		{
+			disableKillCam: true
+		}
+		Skirmish 
+		{
+		}
+		 skirmish
+		{
+		}
+		  Skirmish
+		{
+		}
+	}
+}

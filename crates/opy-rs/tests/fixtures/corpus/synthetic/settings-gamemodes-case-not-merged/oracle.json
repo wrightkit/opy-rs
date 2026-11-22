@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tdisableKillCam: true\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tdisableKillCam: true\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "d45156aa9bd102e7fe46fb435d41f8acdb287dc76b541aec0bfc5cc7730f9e7f"
+  },
+  "fixture": "synthetic/settings-gamemodes-case-not-merged",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "5b733eeab8d73b6ab369b8a0d1b7c36f9b26e370eb3124343b4389990f15e27c"
+      }
+    ],
+    "sha256": "4739376f24af762de569646a41d0561bc5941573e145facadaab078fb03842a7",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

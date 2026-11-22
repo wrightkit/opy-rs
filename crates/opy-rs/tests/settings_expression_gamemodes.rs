@@ -14,6 +14,16 @@ fn expression_gamemodes_match_the_reference_in_both_locales() {
         "settings-expression-gamemodes-variants",
         "settings-gamemodes-scalar-expression",
         "settings-gamemodes-scalar-literal",
+        "settings-expression-gamemodes-case",
+        "settings-gamemodes-case-replace",
+        "settings-gamemodes-case-not-merged",
+        "settings-gamemodes-case-later-empty",
+        "settings-gamemodes-case-first-position",
+        "settings-gamemodes-case-separate",
+        "settings-gamemodes-case-uppercase",
+        "settings-gamemodes-case-disabled",
+        "settings-gamemodes-case-whitespace",
+        "settings-expression-gamemodes-whitespace",
     ] {
         let root = corpus.join(fixture);
         let source = std::fs::read_to_string(root.join("source.opy")).unwrap();
