@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.15](https://github.com/wrightkit/opy-rs/compare/v0.4.14...v0.4.15) - 2026-11-22
+
+### Fixed
+
+- collapse gamemodes that write the same header like upstream ([#796](https://github.com/wrightkit/opy-rs/pull/796))
+
 ## [0.4.14](https://github.com/wrightkit/opy-rs/compare/v0.4.13...v0.4.14) - 2026-11-22
 
 ### Fixed
