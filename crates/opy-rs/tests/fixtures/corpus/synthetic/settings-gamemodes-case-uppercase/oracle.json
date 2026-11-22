@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tLijiang Tower\n\t\t\t}\n\t\t}\n\t\tSKIRMISH\n\t\t{\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tLijiang Tower\n\t\t\t}\n\t\t}\n\t\tSKIRMISH\n\t\t{\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "de7c0ff7a79e5d24d62e6bec6d12e245b5d2adb554a7c1fe6337e881280f8bf9"
+  },
+  "fixture": "synthetic/settings-gamemodes-case-uppercase",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "196c8d89788f918e10feae376a59922f4ceead84608b2c253a6f2ec3cf8b105d"
+      }
+    ],
+    "sha256": "ffc7bd94eaa949c30608e96d1a0063e42707a8b054aaf6c2ab9c56b59943a33b",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

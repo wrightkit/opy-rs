@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tSKIRMISH\n\t\t{\n\t\t}\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tSKIRMISH\n\t\t{\n\t\t}\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "7894f6ba17939ffe78c6c54aca26f0498189a9091cae29fc05e644b40abed9b5"
+  },
+  "fixture": "synthetic/settings-gamemodes-case-separate",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "a2745b3503d9607ecff48a1823e256c4332abd83c4ed8c56358079b5fe1445f6"
+      }
+    ],
+    "sha256": "ef55d4c2a029f07364790b51ff8dc8588e28cd9e22a881f2b89b98348591010c",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t\tAssault\n\t\t{\n\t\t}\n\t\tdisabled Assault\n\t\t{\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t\tAssault\n\t\t{\n\t\t}\n\t\tdisabled Assault\n\t\t{\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "d3ffbabbca43275a3b30f8153b1ecd3dc1cceb665d1ea306397bd1ca48d94969"
+  },
+  "fixture": "synthetic/settings-expression-gamemodes-case",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "bf10ba971a1ebde3905c2f11a2bd423b8a1cad2b6dd5510b674dda2ad59f2823"
+      }
+    ],
+    "sha256": "75dfe770e40b7b808aab72859601a35971573b86d1a2daa4089eeb91a5cada7c",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}
