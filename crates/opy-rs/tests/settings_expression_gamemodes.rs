@@ -22,6 +22,8 @@ fn expression_gamemodes_match_the_reference_in_both_locales() {
         "settings-gamemodes-case-separate",
         "settings-gamemodes-case-uppercase",
         "settings-gamemodes-case-disabled",
+        "settings-gamemodes-case-whitespace",
+        "settings-expression-gamemodes-whitespace",
     ] {
         let root = corpus.join(fixture);
         let source = std::fs::read_to_string(root.join("source.opy")).unwrap();

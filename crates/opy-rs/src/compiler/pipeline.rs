@@ -104,8 +104,8 @@ fn written_mode_header(node: &SettingsNode, locale: &Locale) -> Option<String> {
     let text = workshop_rs::emitter::emit(&program, catalog, locale).ok()?;
     text.lines()
         .nth(2)
-        .and_then(|line| line.trim().strip_suffix('{'))
-        .map(|header| header.trim().to_string())
+        .and_then(|line| line.strip_prefix("        ")?.strip_suffix(" {"))
+        .map(str::to_string)
 }
 
 /// The pinned OverPy stores each mode in an object keyed by the written
